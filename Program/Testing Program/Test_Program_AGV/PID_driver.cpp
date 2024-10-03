@@ -1,3 +1,11 @@
+/*  
+  AGV PID LIBRARY
+  PT. Stechoq Robotika Indonesia
+  
+  Date    : 18 SEPTEMBER 2024
+  Author  : Alfonsus Giovanni Mahendra Putra - Universitas Diponegoro
+*/
+
 #include "PID_driver.h"
 
 void PIDController_Init(PIDController *pid) {

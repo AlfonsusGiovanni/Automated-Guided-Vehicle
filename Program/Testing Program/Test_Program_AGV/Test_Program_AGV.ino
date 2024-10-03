@@ -11,6 +11,8 @@
 #include "PID_driver.h"
 #include "Wire.h" 
 #include "Adafruit_NFCShield_I2C.h"
+#include "Serial_Com.h"
+#include "SoftwareSerial.h"
 //************************************************************************************************************************************************************************************
 
 
@@ -45,6 +47,7 @@
 #define RESET 3
 // ------------
 
+
 // TAG DATA ---------------------
 #define DATA_AUTH_HEADER1   0x5A
 #define DATA_AUTH_HEADER2   0xA5
@@ -60,10 +63,11 @@
 //#define LINESENS_TEST
 //#define MOTOR_TEST
 #define PID_TEST
+//#define SERIAL_TEST
 // -------------------
 
 // ALGORITHM SEL --------------
-#define USE_PLXDAQ
+//#define USE_PLXDAQ
 #define USE_EARLY_CHECK
 //#define USE_OLD_SENS_COORDINATE
 #define USE_NEW_SENS_COORDINATE
@@ -74,6 +78,10 @@
 
 /*USER PRIVATE TYPEDEF*/
 //************************************************************************************************************************************************************************************
+
+// COM TYPEDEF --
+Data_t com_data;
+// --------------
 
 // PID TYPEDEF ---------
 PIDController pid_agv_f;  // -> PID Jalan Maju
@@ -107,6 +115,7 @@ typedef struct{
 
 Tag_Data_t NFC_Tag;
 // ------------------------------------
+
 
 // SENSOR POS --
 typedef enum{
@@ -151,10 +160,12 @@ const int32_t
 sens_weight[SENS_NUM] = {0, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5, 42.5, 47.5, 52.5, 57.5, 62.5, 67.5, 72.5, 80};
 
 uint8_t
+adaptive_turn_spd,
 interval_check = 150,
 line_false_cnt,
 speed_cnt,
-break_cnt;
+break_cnt,
+sens_cnt;
 
 uint16_t 
 sens_value,
@@ -168,6 +179,10 @@ int16_t
 R_line_pos,
 L_line_pos;
 
+int
+total_weight = 0, 
+sens_count = 0;
+
 float
 line_pos,
 pid_val;
@@ -180,10 +195,10 @@ prev_tickC; // -> Timer Regenerative
 bool
 no_line = false,
 line_detected = false,
+line_turn = false,
 start = false,
 running = false;
 //************************************************************************************************************************************************************************************
-
 
 /*USER PRIVATE FUNCTION*/
 //************************************************************************************************************************************************************************************
@@ -205,9 +220,9 @@ NFC_Status_t NFC_writeTag(Tag_Data_t *data, uint8_t tag_type, uint16_t tag_value
 /*VOID SETUP*/
 //************************************************************************************************************************************************************************************
 void setup(){
-  // BAUD RATE SETUP --
+  // BAUD RATE SETUP --------
   Serial.begin(115200);
-  // ------------------
+  // ------------------------
 
   // SETUP PLX DAQ ------------------------------------
   #ifdef USE_PLXDAQ
@@ -287,15 +302,11 @@ void setup(){
   while(1){
     start = !digitalRead(START_BTN);
     if(start){
-      read_sens(FRONT);
-      if(line_detected) break;
-      else{
-        motor_set(BOTH_MOTOR, ROTATE_LEFT, 50, 0);
-        delay(2600);
-        motor_set(BOTH_MOTOR, NORMAL_BREAK, 0, 0);
-        delay(1000);
-        break;
+      while(1){
+        if(line_search(FRONT, ROTATE_LEFT) == true) break;
+        else continue;
       }
+      break;
     }
   }
 
@@ -316,6 +327,22 @@ void setup(){
 /*VOID LOOP*/
 //************************************************************************************************************************************************************************************
 void loop(){
+  #ifdef SERIAL_TEST
+  digitalWrite(SPEAKER_PIN, HIGH);
+  Send_Status(ON_STATION, 100, 5, 5, 90.5);
+
+  /*
+  if(Receive_Serial(&com_data) == Data_Received){
+    if(com_data.Running_state == RUN_START){
+      digitalWrite(SPEAKER_PIN, HIGH);
+    }
+    else if(com_data.Running_state == RUN_STOP){
+      digitalWrite(SPEAKER_PIN, LOW);
+    }
+  }
+  */
+  #endif
+
   #ifdef LINESENS_TEST
   digitalWrite(RUN_LR, HIGH);
   digitalWrite(ENA_R, LOW);
@@ -339,7 +366,7 @@ void loop(){
 
   #ifdef PID_TEST
   digitalWrite(SPEAKER_PIN, HIGH);
-  agv_run(FORWARD, 150, 10);
+  agv_run(REGENERATIVE_FORWARD, 100, 5);
   
   if(millis()-prev_tickA > interval_check && !line_detected){
     line_false_cnt++;
@@ -350,21 +377,13 @@ void loop(){
   if(line_false_cnt >= 5) no_line = true;
 
   if(no_line){
-    line_detected = false;
     motor_set(BOTH_MOTOR, REGENERATIVE_BREAK, 100, 25);
     delay(1500);
-
     while(1){
-      motor_set(BOTH_MOTOR, ROTATE_LEFT, 50, 0);
-      delay(2550);
-      motor_set(BOTH_MOTOR, NORMAL_BREAK, 0, 0);
-      delay(1000);
-
-      calculate_pid(FRONT);
-      if(line_detected){
-        pid_val = 0;
+      if(line_search(FRONT, ROTATE_LEFT) == true){
         line_false_cnt = 0;
         no_line = false;
+        delay(1000);
         break;
       }
       else continue;
@@ -442,12 +461,11 @@ void read_sens(LineSens_sel_t sensor_sel){
   #endif
 
   #ifdef USE_NEW_SENS_COORDINATE
-  int 
-  total_weight = 0, 
+  total_weight = 0;
   sens_count = 0;
 
   if(sensor_sel == FRONT){
-    for (int i = 0; i < 16; i++) {
+    for(int i=0; i<16; i++) {
       int weight = 8 - i;
       sens_value = !digitalRead(sens_pin[FRONT][i]);
       bitWrite(sens_data, i, sens_value);
@@ -455,7 +473,6 @@ void read_sens(LineSens_sel_t sensor_sel){
       total_weight += (bitRead(sens_data, i) & 0xFF) * sens_weight[i];
       sens_count += (bitRead(sens_data, i) & 0xFF);
     }
-
     line_pos = 40 - (total_weight/sens_count);
   }
   #endif
@@ -498,6 +515,9 @@ void agv_run(Run_Dir_t direction, uint8_t speed, uint8_t interval){
   digitalWrite(ENA_R, LOW);
   digitalWrite(ENA_L, LOW);
 
+  if(line_turn == true) speed = speed - 15;
+  else speed = speed;
+
   if(direction == FORWARD){
     calculate_pid(FRONT);
     R_speed = speed + pid_val;
@@ -520,13 +540,8 @@ void agv_run(Run_Dir_t direction, uint8_t speed, uint8_t interval){
 
     if(millis()-prev_tickC > interval && speed_cnt <= speed && !running){
       speed_cnt++;
-      R_speed = speed_cnt + pid_val - right_tolerance;
-      L_speed = speed_cnt - pid_val - left_tolerance;
-      constrain(R_speed, 0, speed-right_tolerance);
-      constrain(L_speed, 0, speed-left_tolerance);
-
-      analogWrite(PWM_R, R_speed);
-      analogWrite(PWM_L, L_speed);
+      analogWrite(PWM_R, speed_cnt);
+      analogWrite(PWM_L, speed_cnt);
       prev_tickC = millis();
     }
     else if(speed_cnt == speed) running = true;
@@ -554,14 +569,18 @@ void agv_run(Run_Dir_t direction, uint8_t speed, uint8_t interval){
 //************************************************************************************************************************************************************************************
 
 
+//************************************************************************************************************************************************************************************
 bool line_search(LineSens_sel_t sensor_sel, Run_Dir_t direction){
   while(1){
     read_sens(sensor_sel);
-    
-    if(line_pos != 0) motor_set(BOTH_MOTOR, direction, 30, 0);
-    else break;
+    motor_set(BOTH_MOTOR, direction, 30, 0);
+    if(line_pos >= -20 && line_pos <= 20 && line_detected){
+      motor_set(BOTH_MOTOR, NORMAL_BREAK, 0, 0);
+      break;
+    }
   }
 }
+//************************************************************************************************************************************************************************************
 
 
 /*--- CHECK SENSOR FUNCTION ---*/
