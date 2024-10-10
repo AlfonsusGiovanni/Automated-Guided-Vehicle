@@ -80,7 +80,7 @@
 //************************************************************************************************************************************************************************************
 
 // COM TYPEDEF --
-Data_t com_data;
+
 // --------------
 
 // PID TYPEDEF ---------
@@ -328,19 +328,7 @@ void setup(){
 //************************************************************************************************************************************************************************************
 void loop(){
   #ifdef SERIAL_TEST
-  digitalWrite(SPEAKER_PIN, HIGH);
-  Send_Status(ON_STATION, 100, 5, 5, 90.5);
-
-  /*
-  if(Receive_Serial(&com_data) == Data_Received){
-    if(com_data.Running_state == RUN_START){
-      digitalWrite(SPEAKER_PIN, HIGH);
-    }
-    else if(com_data.Running_state == RUN_STOP){
-      digitalWrite(SPEAKER_PIN, LOW);
-    }
-  }
-  */
+  
   #endif
 
   #ifdef LINESENS_TEST

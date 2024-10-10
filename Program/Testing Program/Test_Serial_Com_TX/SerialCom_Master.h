@@ -6,14 +6,15 @@
   Author  : Alfonsus Giovanni Mahendra Putra - Universitas Diponegoro
 */
 
-#ifndef SERIAL_COM_H
-#define SERIAL_COM_H
+#ifndef SERIALCOM_MASTER_H
+#define SERIALCOM_MASTER_H
 
 #include "Arduino.h"
 #include "string.h"
 
 #define HEADER 0xFF
-#define MAX_LEN 64
+#define ERROR_PACKET 0x54
+#define MAX_LEN 16
 
 typedef struct{
   uint8_t
@@ -28,8 +29,16 @@ typedef struct{
   Running_State = 0x02,
   AGV_Status = 0x03,
   Sensor_Data = 0x04,
-  NFC_Data = 0x05;
+  NFC_Data = 0x05,
+  Joystick_Data = 0x06;
 }Item_t;
+
+typedef struct{
+  uint8_t
+  Sub_item1 = 0x01,
+  Sub_item2 = 0x02,
+  Sub_item3 = 0x03;
+}Sub_Item_t;
 
 typedef struct{
   uint8_t
@@ -43,14 +52,6 @@ typedef struct{
   Battery_overvoltage = 0x40,
   Battery_overcurrent = 0x80;
 }Error_t;
-
-typedef enum{
-  Send_success = 0x01,
-  Receive_success,
-  Data_valid,
-  Dara_not_valid,
-  Serial_error,
-}Com_status_t;
 
 typedef enum{
   LF_mode = 0x01,
@@ -86,6 +87,11 @@ typedef enum{
 
 typedef struct{
   uint8_t
+  return_data[16],
+  data_length,
+  Instruction_get,
+  Item_get,
+  SubItem_get,
   Select_mode,
   Base_speed = 100,
   Select_state = 2,
@@ -94,8 +100,7 @@ typedef struct{
   Position = 1,
   SensorA,
   SensorB,
-  Tag_position,
-  Error_value;
+  Tag_position;
 
   uint16_t
   Pos_value,
@@ -103,33 +108,32 @@ typedef struct{
   Pickup_counter,
   Tag_value;
 
-  float *Battery_level;
+  int16_t
+  Xpos,
+  Ypos;
+
+  float Battery_level;
 
   Instruction_t instruction;
   Error_t error_state;
-  Com_status_t com_status;
   Item_t item;
+  Sub_Item_t sub_item;
 }Param_t;
 
-uint8_t Length_calculator(uint8_t *data);
+void Send_Ping(Param_t *param);
 
-Com_status_t 
-Ping_Return(Param_t *param),
-Running_Mode_Return(Param_t *param),
-Running_State_Return(Param_t *param),
-AGV_Status_Return(Param_t *param),
-Sensor_Data_Return(Param_t *param),
-NFC_Data_Return(Param_t *param),
-Error_Packet_Return(Param_t *param),
+void Set_Running_Mode(Param_t *param, Select_mode_data_t mode);
+void Set_Running_BaseSpeed(Param_t *param, uint8_t base_speed);
+void Set_Running_State(Param_t *param, Select_state_data_t state);
+void Set_Running_Accel(Param_t *param, Accel_data_t accel);
+void Set_Running_Brake(Param_t *param, Brake_data_t brake);
+void Set_Joystick(Param_t *param, uint8_t Xvalue, uint8_t Yvalue);
 
-Send_Ping(Param_t *param),
-Send_Error(Param_t *param, uint8_t error_value),
-Set_Running_Mode(Param_t *param, Select_mode_data_t mode, uint8_t base_speed),
-Set_Running_State(Param_t *param, Select_state_data_t state, Accel_data_t accel, Brake_data_t brake),
-Read_AGV_Status(Param_t *param, Position_data_t pos, uint16_t pos_val, uint16_t send_cnt, uint16_t pickup_cnt, float *battery_lvl),
-Read_Sensor_Data(Param_t *param, Sensor_data_t sens_state),
-Read_NFC_Data(Param_t *param, Position_data_t pos, uint8_t pos_val);
-
-Com_status_t Receive_Instruction(Param_t *param);
+void Read_Running_Mode(Param_t *param);
+void Read_Running_State(Param_t *param);
+void Read_AGV_Status(Param_t *param);
+void Read_Sensor_Data(Param_t *param);
+void Read_NFC_Data(Param_t *param);
+void Read_Joystick_Data(Param_t *param);
 
 #endif
