@@ -59,10 +59,10 @@ void Set_Running_BaseSpeed(Param_t *param, uint8_t base_speed){
 }
 
 // SET RUNNING STATE
-void Set_Running_State(Param_t *param, Select_state_data_t state){
+void Set_Running_State(Param_t *param, Select_state_data_t state, Select_dir_data_t dir){
   uint8_t
-  len = 0x04,
-  tx_buff[] = {HEADER, HEADER, len, param->instruction.Write, param->item.Running_State, param->sub_item.Sub_item1, state};
+  len = 0x05,
+  tx_buff[] = {HEADER, HEADER, len, param->instruction.Write, param->item.Running_State, param->sub_item.Sub_item1, state, dir};
 
   Serial1.write(tx_buff, sizeof(tx_buff));
   Serial1.readBytes(rx_buff, MAX_LEN);
@@ -114,7 +114,7 @@ void Set_Joystick(Param_t *param, uint8_t Xvalue, uint8_t Yvalue){
 
   if(rx_buff[0] == HEADER && rx_buff[1] == HEADER){
     param->data_length = rx_buff[2];
-    memcpy(param->return_data, rx_buff, 7);
+    memcpy(param->return_data, rx_buff, 4);
   }
 }
 
@@ -128,8 +128,11 @@ void Read_Running_Mode(Param_t *param){
   Serial1.readBytes(rx_buff, MAX_LEN);
 
   if(rx_buff[0] == HEADER && rx_buff[1] == HEADER && rx_buff[3] == 0){
-    if(rx_buff[4] == 0x01) param->Select_mode = LF_mode;
-    else param->Select_mode = Lidar_mode;
+    param->data_length = rx_buff[2];
+    
+    if(rx_buff[4] == 0x00) param->Select_mode = NOT_SET;
+    else if(rx_buff[4] == 0x01) param->Select_mode = LF_MODE;
+    else param->Select_mode = LIDAR_MODE;
     param->Base_speed = rx_buff[5];
     memcpy(param->return_data, rx_buff, 6);
   }
@@ -148,20 +151,30 @@ void Read_Running_State(Param_t *param){
   Serial1.readBytes(rx_buff, MAX_LEN);
 
   if(rx_buff[0] == HEADER && rx_buff[1] == HEADER && rx_buff[3] == 0){
-    if(rx_buff[4] == 0x01) param->Select_state = Start;
-    else if(rx_buff[4] == 0x02) param->Select_state = Stop;
-    else param->Select_state = Pause;
+    param->data_length = rx_buff[2];
 
-    if(rx_buff[5] == 0x01) param->Set_Acceleration = Normal_Accel;
-    else param->Set_Acceleration = Regenerative_Accel;
+    if(rx_buff[4] == 0x01) param->Select_state = START;
+    else if(rx_buff[4] == 0x02) param->Select_state = STOP;
+    else param->Select_state = PAUSE;
 
-    if(rx_buff[6] == 0x01) param->Set_Breaking = Normal_Brake;
-    else param->Set_Acceleration = Regenerative_Brake;
+    if(rx_buff[5] == 0x01) param->Set_Direction = FORWARD;
+    else if(rx_buff[5] == 0x02) param->Set_Direction = BACKWARD;
+    else if(rx_buff[5] == 0x03) param->Set_Direction = LEFT;
+    else if(rx_buff[5] == 0x04) param->Set_Direction = RIGHT;
+    else if(rx_buff[5] == 0x05) param->Set_Direction = ROTATE_LEFT;
+    else if(rx_buff[5] == 0x06) param->Set_Direction = ROTATE_RIGHT;
+    else if(rx_buff[5] == 0x07) param->Set_Direction = BRAKE;
 
-    memcpy(param->return_data, rx_buff, 7);
+    if(rx_buff[6] == 0x01) param->Set_Acceleration = NORMAL_ACCEL;
+    else param->Set_Acceleration = REGENERATIVE_ACCEL;
+
+    if(rx_buff[7] == 0x01) param->Set_Breaking = NORMAL_BRAKE;
+    else param->Set_Breaking = REGENERATIVE_BRAKE;
+
+    memcpy(param->return_data, rx_buff, 8);
   }
   else if(rx_buff[0] == HEADER && rx_buff[1] == HEADER && rx_buff[3] != 0){
-    memcpy(param->return_data, rx_buff, 7);
+    memcpy(param->return_data, rx_buff, 8);
   }
 }
 
@@ -175,11 +188,12 @@ void Read_AGV_Status(Param_t *param){
   Serial1.readBytes(rx_buff, MAX_LEN);
 
   if(rx_buff[0] == HEADER && rx_buff[1] == HEADER && rx_buff[3] == 0){
-    if(rx_buff[4] == 0x01) param->Position = Home;
-    else if(rx_buff[4] == 0x02) param->Position = On_station;
-    else param->Position = On_the_way;
-
     param->data_length = rx_buff[2];
+
+    if(rx_buff[4] == 0x01) param->Position = HOME;
+    else if(rx_buff[4] == 0x02) param->Position = ON_STATION;
+    else param->Position = ON_THE_WAY;
+
     param->Pos_value = (rx_buff[5] << 8) | rx_buff[6];
     param->Send_counter = (rx_buff[7] << 8) | rx_buff[8];
     param->Pickup_counter = (rx_buff[9] << 8) | rx_buff[10];
@@ -206,11 +220,11 @@ void Read_Sensor_Data(Param_t *param){
   if(rx_buff[0] == HEADER && rx_buff[1] == HEADER && rx_buff[3] == 0){
     param->data_length = rx_buff[2];
 
-    if(rx_buff[4] == 0x01) param->SensorA = Detected;
-    else param->SensorA = Not_detected;
+    if(rx_buff[4] == 0x01) param->SensorA = DETECTED;
+    else param->SensorA = NOT_DETECTED;
 
-    if(rx_buff[5] == 0x01) param->SensorB = Detected;
-    else param->SensorB = Not_detected;
+    if(rx_buff[5] == 0x01) param->SensorB = DETECTED;
+    else param->SensorB = NOT_DETECTED;
 
     memcpy(param->return_data, rx_buff, 6);
   }
@@ -231,9 +245,9 @@ void Read_NFC_Data(Param_t *param){
   if(rx_buff[0] == HEADER && rx_buff[1] == HEADER && rx_buff[3] == 0){
     param->data_length = rx_buff[2];
 
-    if(rx_buff[4] == 0x01) param->Tag_position = Home;
-    else if(rx_buff[4] == 0x02) param->Tag_position = On_station;
-    else param->Tag_position = On_the_way;
+    if(rx_buff[4] == 0x01) param->Tag_position = HOME;
+    else if(rx_buff[4] == 0x02) param->Tag_position = ON_STATION;
+    else param->Tag_position = ON_THE_WAY;
 
     param->Tag_value = (rx_buff[5] << 8) | rx_buff[6];
 

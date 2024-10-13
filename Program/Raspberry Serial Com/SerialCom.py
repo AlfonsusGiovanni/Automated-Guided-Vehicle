@@ -1,133 +1,365 @@
 # Raspberry Serial Communication Handler Program
 # PT Stechoq Robotika Indonesia
-# Date   : 27 September 2024
+# Date	 : 11 Oktober 2024
 # Author : Alfonsus Giovanni Mahendra Putra - Universitas Diponegoro
 
-# USED LIBRARY
+
+# USED LIBRARY -----
 import serial
 import struct
 import array as arr
 import time
-# -----------
+import copy
+# ------------------
 
 # SERIAL SETUP ---------
-baudRate = 115200
+baudRate = 512000
+MaxMsgsLen = 16
 portCom = '/dev/serial0'
-timeout = 0.1
+timeout = 0.001
 # ----------------------
 
-# COM STATUS ---------------
-dataReceived_valid = 0x01
-dataReceived_invalid = 0x02
-dataNotReceived = 0x03
-# --------------------------
 
-# MODE --------
-LF_mode = 0x01
-LID_mode = 0x02
-# -------------
+# Instruction 
+class Instruction:
+    Ping = 0x01
+    Read = 0x02
+    Write = 0x03
 
-# RUN STATE ----
-RUN_START = 0x01
-RUN_STOP = 0x02
-RUN_PAUSE = 0x03
-# --------------
+class Item:
+    Running_Mode = 0x01
+    Running_State = 0x02
+    AGV_Status = 0x03
+    Sensor_Data = 0x04
+    NFC_Data = 0x05
+    Joystick_Data = 0x06
+
+class SubItem:
+    Sub_item1 = 0x01
+    Sub_item2 = 0x02
+    Sub_item3 = 0x03
+
+class Error:
+    No_err = 0x00
+    Instruction_err = 0x01
+    Item_err = 0x02
+    Length_err = 0x04
+    Tag_reading_err = 0x08
+    LoRa_com_err = 0x10
+    Carrier_hook_err = 0x20
+    Battery_overvoltage = 0x40
+    Battery_overcurrent = 0x80
+
+class SelectModeData:
+    NOT_SET = 0x00
+    LF_MODE = 0x01
+    LIDAR_MODE = 0x02
+
+class SelectSpeedData:
+    NORMAL_SPEED = 0x01
+    HIGH_SPEED = 0x02
+
+class SelectStateData:
+    START = 0x01
+    STOP = 0x02
+    PAUSE = 0x03
+
+class SelectDirData:
+    FORWARD = 0x01
+    BACKWARD = 0x02
+    LEFT = 0x03
+    RIGHT = 0x04
+    ROTATE_LEFT = 0x05
+    ROTATE_RIGHT = 0x06
+    BRAKE = 0x07
+
+class SensorData:
+    DETECTED = 0x01
+    NOT_DETECTED = 0x02
+
+class AccelData:
+    NORMAL_ACCEL = 0x01
+    REGENERATIVE_ACCEL = 0x02
+
+class BrakeData:
+    NORMAL_BRAKE = 0x01
+    REGENERATIVE_BRAKE = 0x02
+
+class PositionData:
+    HOME = 0x01
+    ON_STATION = 0x02
+    ON_THE_WAY = 0x03
 
 
 class Serial_COM:
+    def __init__(self, inputBaudRate, serialPort, inputTimeout):
+          self.baud = inputBaudRate
+          self.port = serialPort
+          self.timeout = inputTimeout
+          
+          self.Header = 0xFF
 
-        def __init__(self, inputBaudRate, serialPort, inputTimeout):
-                self.baud = inputBaudRate
-                self.port = serialPort
-                self.timeout = inputTimeout
+          self.return_data = bytearray(16)
+          self.data_length = 0
+          self.Instruction_get = 0
+          self.Item_get = 0
+          self.SubItem_get = 0
+          
+          self.Select_mode = SelectModeData.NOT_SET
+          self.Base_speed = 0
+          
+          self.Select_state = SelectStateData.STOP
+          self.Set_Direction = SelectDirData.FORWARD
+          self.Set_Acceleration = AccelData.NORMAL_ACCEL
+          self.Set_Breaking = BrakeData.NORMAL_BRAKE
+          
+          self.Position = PositionData.HOME
+          self.Pos_value = 0
+          self.Send_counter = 0
+          self.Pickup_counter = 0
+          self.Tag_position = PositionData.HOME
+          self.Tag_value = 0
+          
+          self.SensorA = SensorData.NOT_DETECTED
+          self.SensorB = SensorData.NOT_DETECTED
+          
+          self.Battery_level = 0.0
+          
+          self.Xpos = 0
+          self.Ypos = 0
+          
+          self.instruction = Instruction()
+          self.error_state = Error()
+          self.item = Item()
+          self.sub_item = SubItem()
 
-                self.msgHeader = 0xff
-                self.msgTail = 0xa5
+          # self.data = serial.Serial(serialPort, inputBaudRate, timeout=inputTimeout)
+          
+    def Send_Ping(self):
+        msgs_len = 0x01
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Ping]
+        self.data.write(tx_buff)
 
-                self.sendMode = 0x01
-                self.sendRun = 0x02
-                self.sendStatus = 0x03
+        rx_buff = self.data.read(5)
+        if(rx_buff[0] == self.Header and rx_buff[1] == self.Header):
+            self.data_length = rx_buff[2]
+            self.return_data = copy.deepcopy(rx_buff)
+    
+    def Set_Running_Mode(self, select_mode):
+        msgs_len = 0x04
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Write, self.item.Running_Mode, self.sub_item.Sub_item1, select_mode]
+        self.data.write(tx_buff)
 
-                self.command = None
-                self.mode = None
-                self.run_state = None
-                self.position = None
-                self.pos_value = None
-                self.send_counter = None
-                self.pickup_counter = None
-                self.battery_value = None
+        rx_buff = self.data.read(4)
+        if(rx_buff[0] == self.Header and rx_buff[1] == self.Header):
+            self.data_length = rx_buff[2]
+            self.return_data = copy.deepcopy(rx_buff)
+    
+    def Set_Base_Speed(self, base_speed):
+        msgs_len = 0x04
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Write, self.item.Running_Mode, self.sub_item.Sub_item2, base_speed]
+        self.data.write(tx_buff)
 
-                self.status = None
+        rx_buff = self.data.read(4)
+        if(rx_buff[0] == self.Header and rx_buff[1] == self.Header):
+            self.data_length = rx_buff[2]
+            self.return_data = copy.deepcopy(rx_buff)
 
-                self.data = serial.Serial(serialPort, inputBaudRate, timeout=inputTimeout)
+    def Set_Running_State(self, select_state, direction):
+        msgs_len = 0x05
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Write, self.item.Running_State, self.sub_item.Sub_item1, select_state, direction]
+        self.data.write(tx_buff)
 
-        def Send_Mode(self, setMode):
-                tx_buff = bytearray([self.msgHeader, self.sendMode, setMode, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, self.msgTail])
-                self.data.write(tx_buff)
+        rx_buff = self.data.read(4)
+        if(rx_buff[0] == self.Header and rx_buff[1] == self.Header):
+            self.data_length = rx_buff[2]
+            self.return_data = copy.deepcopy(rx_buff)
+    
+    def Set_Running_Accel(self, set_accel):
+        msgs_len = 0x04
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Write, self.item.Running_State, self.sub_item.Sub_item2, set_accel]
+        self.data.write(tx_buff)
 
-        def Send_Run(self, setRun):
-                tx_buff = bytearray([self.msgHeader, self.sendRun, 0x00, setRun, 0x00, 0x00, 0x00, 0x00,
-                                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, self.msgTail])
-                self.data.write(tx_buff)
+        rx_buff = self.data.read(4)
+        if(rx_buff[0] == self.Header and rx_buff[1] == self.Header):
+            self.data_length = rx_buff[2]
+            self.return_data = copy.deepcopy(rx_buff)
+    
+    def Set_Running_Brake(self, set_brake):
+        msgs_len = 0x04
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Write, self.item.Running_State, self.sub_item.Sub_item3, set_brake]
+        self.data.write(tx_buff)
 
-        def Receive_Data(self, byteSize):
-                rx_buff = self.data.read(byteSize)
+        rx_buff = self.data.read(4)
+        if(rx_buff[0] == self.Header and rx_buff[1] == self.Header):
+            self.data_length = rx_buff[2]
+            self.return_data = copy.deepcopy(rx_buff)
+    
+    def Set_Joystick(self, valueX, valueY):
+        msgs_len = 0x04
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Write, self.item.Running_State, valueX, valueY]
+        self.data.write(tx_buff)
 
-                if len(rx_buff) == byteSize:
-                        if rx_buff[0] == self.msgHeader and rx_buff[1] == self.sendStatus and self.command == 0x03:
-                                self.mode = rx_buff[2]
-                                self.run_state = rx_buff[3]
-                                self.position = rx_buff[4]
-                                self.pos_value = (rx_buff[5] << 8) | rx_buff[6]
-                                self.send_counter = (rx_buff[7] << 8) | rx_buff[8]
-                                self.pickup_counter = (rx_buff[9] << 8) | rx_buff[10]
+        rx_buff = self.data.read(4)
+        if(rx_buff[0] == self.Header and rx_buff[1] == self.Header):
+            self.data_length = rx_buff[2]
+            self.return_data = copy.deepcopy(rx_buff)
+    
+    def Read_Running_Mode(self):
+        msgs_len = 0x02
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Read, self.item.Running_Mode]
+        self.data.write(tx_buff)
 
-                                voltageArray = arr.array('B', [rx_buff[11], rx_buff[12], rx_buff[13], rx_buff[14]])
-                                voltageData = bytes(voltageArray)
+        rx_buff = self.data.read(MaxMsgsLen)
+        if(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] == 0):
+            self.data_length = rx_buff[2]
 
-                                self.battery_value = struct.unpack('f', voltageData)[0]
+            if(rx_buff[4] == 0x00):
+                self.Select_mode = SelectModeData.NOT_SET
+            elif(rx_buff[4] == 0x01):
+                self.Select_mode = SelectModeData.LF_MODE
+            else:
+                self.Select_mode = SelectModeData.LIDAR_MODE
+            self.Base_speed = rx_buff[5]
 
-                                self.status = dataReceived_valid
-                        else:
-                                self.status = dataReceived_invalid
-                else :
-                        self.status = dataNotReceived
+            self.return_data = copy.deepcopy(rx_buff)
 
-                return rx_buff
-                self.data.flushInput()
+        elif(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] != 0):
+            self.return_data = copy.deepcopy(rx_buff)
 
-        def Test_Receive(self, byteSize):
-                get_data = UART_COM.Receive_Data(byteSize)
+    def Read_Running_State(self):
+        msgs_len = 0x02
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Read, self.item.Running_State]
+        self.data.write(tx_buff)
 
-                if UART_COM.status == dataReceived_valid:
-                        print("Data Valid")
-                        print([hex(i) for i in get_data])
+        rx_buff = self.data.read(8)
+        if(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] == 0):
+            self.data_length = rx_buff[2]
 
-                elif UART_COM.status == dataReceived_invalid:
-                        print("Data Invalid")
+            if(rx_buff[4] == 0x01):
+                self.Select_state = SelectStateData.START
+            elif(rx_buff[4] == 0x02):
+                self.Select_state = SelectStateData.STOP
+            else:
+                self.Select_state = SelectStateData.PAUSE
 
-                else:
-                        print("Data Not Received")
+            if(rx_buff[5] == 0x01):
+                self.Set_Direction = SelectDirData.FORWARD
+            elif(rx_buff[5] == 0x02):
+                self.Set_Direction = SelectDirData.BACKWARD
+            elif(rx_buff[5] == 0x03):
+                self.Set_Direction = SelectDirData.LEFT
+            elif(rx_buff[5] == 0x04):
+                self.Set_Direction = SelectDirData.RIGHT
+            elif(rx_buff[5] == 0x05):
+                self.Set_Direction = SelectDirData.ROTATE_LEFT
+            elif(rx_buff[5] == 0x06):
+                self.Set_Direction = SelectDirData.ROTATE_RIGHT
+            elif(rx_buff[5] == 0x07):
+                self.Set_Direction = SelectDirData.BRAKE
 
-        def Test_Transmit(self, iteration):
-                print("Sending...")
-                for a in range(0, iteration):
-                        UART_COM.Send_Run(RUN_START)
+            if(rx_buff[6] == 0x01):
+                self.Set_Acceleration = AccelData.NORMAL_ACCEL
+            else:
+                self.Set_Acceleration = AccelData.REGENERATIVE_ACCEL
 
-                for b in range(0, iteration):
-                        UART_COM.Send_Run(RUN_STOP)
+            if(rx_buff[7] == 0x01):
+                self.Set_Breaking = BrakeData.NORMAL_BRAKE
+            else:
+                self.Set_Breaking = BrakeData.REGENERATIVE_BRAKE
+
+            self.return_data = copy.deepcopy(8)
+
+        elif(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] != 0):
+            self.return_data = copy.deepcopy(rx_buff)
+    
+    def Read_AGV_Status(self):
+        msgs_len = 0x02
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Read, self.item.AGV_Status]
+        self.data.write(tx_buff)
+
+        rx_buff = self.data.read(15)
+        if(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] == 0):
+            self.data_length = rx_buff[2]
+
+            if(rx_buff[4] == 0x01):
+                self.Position = PositionData.HOME
+            elif(rx_buff[4] == 0x02):
+                self.Position = PositionData.ON_STATION
+            else:
+                self.Position = PositionData.ON_THE_WAY
+
+            self.Pos_value = (rx_buff[5] << 8) | rx_buff[6]
+            self.Send_counter = (rx_buff[7] << 8) | rx_buff[8]
+            self.Pickup_counter = (rx_buff[9] << 8) | rx_buff[10]
+
+            voltage_array = arr.array('B', [rx_buff[11], rx_buff[12], rx_buff[13], rx_buff[14]])
+            voltage_data = bytes(voltage_array)
+            self.Battery_level = struct.unpack('f', voltage_data)[0]
+
+            self.return_data = copy.deepcopy(rx_buff)
+
+        elif(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] != 0):
+            self.return_data = copy.deepcopy(rx_buff)
+    
+    def Read_Sensor_Data(self):
+        msgs_len = 0x02
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Read, self.item.Sensor_Data]
+        self.data.write(tx_buff)
+
+        rx_buff = self.data.read(MaxMsgsLen)
+        if(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] == 0):
+            self.data_length = rx_buff[2]
+            if(rx_buff[4] == 0x01):
+                self.SensorA = SensorData.DETECTED
+            else:
+                self.SensorA = SensorData.NOT_DETECTED
+            if(rx_buff[5] == 0x01):
+                self.SensorB = SensorData.DETECTED
+            else:
+                self.SensorB = SensorData.NOT_DETECTED
+            self.return_data = copy.deepcopy(rx_buff)
+
+        elif(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] != 0):
+            self.return_data = copy.deepcopy(rx_buff)
+    
+    def Read_NFC_Data(self):
+        msgs_len = 0x02
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Read, self.item.NFC_Data]
+        self.data.write(tx_buff)
+
+        rx_buff = self.data.read(MaxMsgsLen)
+        if(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] == 0):
+            self.data_length = rx_buff[2]
+            if(rx_buff[4] == 0x01):
+                self.Tag_position = PositionData.HOME
+            elif(rx_buff[4] == 0x02):
+                self.Tag_position = PositionData.ON_STATION
+            else:
+                self.Tag_position = PositionData.ON_THE_WAY
+            self.Tag_value = (rx_buff[5] << 8) | rx_buff[6]
+            self.return_data = copy.deepcopy(rx_buff)
+
+        elif(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] != 0):
+            self.return_data = copy.deepcopy(rx_buff)
+    
+    def Read_Joystick_Data(self):
+        msgs_len = 0x02
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Read, self.item.Joystick_Data]
+        self.data.write(tx_buff)
+
+        rx_buff = self.data.read(MaxMsgsLen)
+        if(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] == 0):
+            self.data_length = rx_buff[2]
+            self.Xpos = rx_buff[4]
+            self.Ypos = rx_buff[5]
+            self.return_data = copy.deepcopy(rx_buff)
+
+        elif(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] != 0):
+            self.return_data = copy.deepcopy(rx_buff)
 
 UART_COM = Serial_COM(baudRate, portCom, timeout)
 
 while True:
-        UART_COM.Receive_Data(16)
-
-        print("Position: ", UART_COM.position)
-        print("Value: ", UART_COM.pos_value)
-        print("Send: ", UART_COM.send_counter)
-        print("Pick Up: ", UART_COM.pickup_counter)
-        print("Battery: ", UART_COM.battery_value)
-
-#       UART_COM.Test_Transmit(100)
-#       UART_COM.Test_Receive(16)
+    print("No Error")
+    time.sleep(1)

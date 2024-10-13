@@ -1,0 +1,188 @@
+# Raspberry Serial Communication Handler Program
+# PT Stechoq Robotika Indonesia
+# Date	 : 11 Oktober 2024
+# Author : Alfonsus Giovanni Mahendra Putra - Universitas Diponegoro
+
+
+# USED LIBRARY -----
+import serial
+import struct
+import array as arr
+import time
+# ------------------
+
+# SERIAL SETUP ---------
+baudRate = 115200
+portCom = '/dev/serial0'
+timeout = 0.05
+# ----------------------
+
+# COM STATUS ---------------
+dataReceived_valid = 0x01
+dataReceived_invalid = 0x02
+dataNotReceived = 0x03
+# --------------------------
+
+# MODE --------
+LF_mode = 0x01
+LID_mode = 0x02
+# -------------
+
+# RUN STATE ----
+RUN_START = 0x01
+RUN_STOP = 0x02
+RUN_PAUSE = 0x03
+# --------------
+
+
+class Instruction:
+    Ping = 0x01
+    Read = 0x02
+    Write = 0x03
+
+class Item:
+    Running_Mode = 0x01
+    Running_State = 0x02
+    AGV_Status = 0x03
+    Sensor_Data = 0x04
+    NFC_Data = 0x05
+    Joystick_Data = 0x06
+
+class SubItem:
+    Sub_item1 = 0x01
+    Sub_item2 = 0x02
+    Sub_item3 = 0x03
+
+class Error:
+    No_err = 0x00
+    Instruction_err = 0x01
+    Item_err = 0x02
+    Length_err = 0x04
+    Tag_reading_err = 0x08
+    LoRa_com_err = 0x10
+    Carrier_hook_err = 0x20
+    Battery_overvoltage = 0x40
+    Battery_overcurrent = 0x80
+
+class SelectModeData:
+    NOT_SET = 0x00
+    LF_MODE = 0x01
+    LIDAR_MODE = 0x02
+
+class SelectSpeedData:
+    NORMAL_SPEED = 0x01
+    HIGH_SPEED = 0x02
+
+class SelectStateData:
+    START = 0x01
+    STOP = 0x02
+    PAUSE = 0x03
+
+class SelectDirData:
+    FORWARD = 0x01
+    BACKWARD = 0x02
+    LEFT = 0x03
+    RIGHT = 0x04
+    ROTATE_LEFT = 0x05
+    ROTATE_RIGHT = 0x06
+    BRAKE = 0x07
+
+class SensorData:
+    DETECTED = 0x01
+    NOT_DETECTED = 0x02
+
+class AccelData:
+    NORMAL_ACCEL = 0x01
+    REGENERATIVE_ACCEL = 0x02
+
+class BrakeData:
+    NORMAL_BRAKE = 0x01
+    REGENERATIVE_BRAKE = 0x02
+
+class PositionData:
+    HOME = 0x01
+    ON_STATION = 0x02
+    ON_THE_WAY = 0x03
+
+
+class Serial_COM:
+    def __init__(self, inputBaudRate, serialPort, inputTimeout):
+          self.Header = 0xFF
+
+          self.return_data = bytearray(16)
+          self.data_length = 0
+          self.Instruction_get = 0
+          self.Item_get = 0
+          self.SubItem_get = 0
+          
+          self.Select_mode = SelectModeData.NOT_SET
+          self.Base_speed = 0
+          
+          self.Select_state = SelectStateData.STOP
+          self.Set_Direction = SelectDirData.FORWARD
+          self.Set_Acceleration = AccelData.NORMAL_ACCEL
+          self.Set_Breaking = BrakeData.NORMAL_BRAKE
+          
+          self.Position = PositionData.HOME
+          self.Pos_value = 0
+          self.Send_counter = 0
+          self.Pickup_counter = 0
+          self.Tag_position = PositionData.HOME
+          self.Tag_value = 0
+          
+          self.SensorA = SensorData.NOT_DETECTED
+          self.SensorB = SensorData.NOT_DETECTED
+          
+          self.Battery_level = 0.0
+          
+          self.Xpos = 0
+          self.Ypos = 0
+          
+          self.instruction = Instruction()
+          self.error_state = Error()
+          self.item = Item()
+          self.sub_item = SubItem()
+          
+    def Send_Ping():
+        msgs_len = 0x01
+        tx_buff = []
+        pass
+    
+    def Set_Running_Mode():
+        pass
+    
+    def Set_Running_State():
+        pass
+    
+    def Set_Running_Accel():
+        pass
+    
+    def Set_Running_Brake():
+        pass
+    
+    def Set_Joystick():
+        pass
+    
+    def Read_Running_Mode():
+        pass
+    
+    def Read_Running_State():
+        pass
+    
+    def Read_AGV_Status():
+        pass
+    
+    def Read_Sensor_Data():
+        pass
+    
+    def Read_NFC_Data():
+        pass
+    
+    def Read_Joystick_Data():
+        pass
+
+UART_COM = Serial_COM(baudRate, portCom, timeout)
+
+while True:
+    print("No Error")
+    time.sleep(1)

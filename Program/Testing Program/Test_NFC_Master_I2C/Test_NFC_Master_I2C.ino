@@ -9,15 +9,17 @@
 /*USER PRIVATE INCLUDE*/
 //************************************************************************************************************************************************************************************
 #include "Wire.h" 
-#include "Adafruit_NFCShield_I2C.h"
+#include "Adafruit_PN532.h"
 #include "LiquidCrystal_I2C.h"
 //************************************************************************************************************************************************************************************
 
 
 /*USER PRIVATE DEFINE*/
 //************************************************************************************************************************************************************************************
-#define IRQ     2
-#define RESET   3
+#define IRQ_NFC1  14
+#define IRQ_NFC2  16
+#define VIR_VCC1  15
+#define VIR_VCC2  17
 
 #define DATA_AUTH_HEADER1   0x5A
 #define DATA_AUTH_HEADER2   0xA5
@@ -29,7 +31,7 @@
 /*USER PRIVATE TYPEDEF*/
 //************************************************************************************************************************************************************************************
 LiquidCrystal_I2C lcd(0x27,20,4);
-Adafruit_NFCShield_I2C nfc(IRQ, RESET);
+Adafruit_PN532 nfc(IRQ_NFC1, 2);
 
 typedef enum{
   SUCCESS = 0x01,
@@ -62,6 +64,8 @@ Tag_Data_t NFC_Tag;
 uint8_t
 nfc_data[16],
 nfc_uid[4];
+
+uint8_t NFC_Timeout = 25;
 //************************************************************************************************************************************************************************************
 
 
@@ -85,14 +89,19 @@ void check_nfc_Data(NFC_Data_Action_t action);
 void setup(){
   Serial.begin(115200);
 
+  pinMode(VIR_VCC1, OUTPUT);
+  pinMode(VIR_VCC2, OUTPUT);
+
   lcd.init();
   lcd.backlight();
 
-  nfc.begin();
+  digitalWrite(VIR_VCC1, HIGH);
+  digitalWrite(VIR_VCC2, LOW);
 
+  nfc.begin();
   uint32_t versiondata = nfc.getFirmwareVersion();
   if (!versiondata) {
-    Serial.print("Device Not Found");
+    Serial.println("Device Not Found");
     while (1);
   }
   
@@ -103,6 +112,8 @@ void setup(){
   nfc.SAMConfig();
   
   Serial.println("Waiting for an ISO14443A Card ...");
+
+  delay(2000);
 }
 //************************************************************************************************************************************************************************************
 
@@ -110,7 +121,21 @@ void setup(){
 /*VOID LOOP*/
 //************************************************************************************************************************************************************************************
 void loop(){
-  
+  for(int i=0; i<100; i++){
+    nfc.begin();
+    nfc.SAMConfig();
+    digitalWrite(VIR_VCC1, HIGH);
+    digitalWrite(VIR_VCC2, LOW);
+    check_nfc_UID();
+  }
+
+  for(int i=0; i<100; i++){
+    nfc.begin();
+    nfc.SAMConfig();
+    digitalWrite(VIR_VCC1, LOW);
+    digitalWrite(VIR_VCC2, HIGH);
+    check_nfc_UID();
+  }
 }
 //************************************************************************************************************************************************************************************
 
@@ -123,7 +148,7 @@ NFC_Status_t readUID(uint8_t *stored_UID){
   uid_Length,
   read_success;
   
-  read_success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, get_uid, &uid_Length);
+  read_success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, get_uid, &uid_Length, NFC_Timeout);
 
   if(read_success && uid_Length == 4){
     for(int i=0; i<uid_Length; i++){
@@ -147,7 +172,7 @@ NFC_Status_t NFC_readData(uint8_t *stored_Data){
   uid_Length,
   read_success;
 
-  read_success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, get_uid, &uid_Length);
+  read_success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, get_uid, &uid_Length, NFC_Timeout);
 
   if(read_success && uid_Length == 4){
     read_success = nfc.mifareclassic_AuthenticateBlock(get_uid, uid_Length, 4, 0, keyA);
@@ -182,7 +207,7 @@ NFC_Status_t NFC_writeData(uint8_t *Data_to_store){
   read_success,
   write_success;
 
-  read_success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, get_uid, &uid_Length);
+  read_success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, get_uid, &uid_Length, NFC_Timeout);
 
   if(read_success && uid_Length == 4){
     read_success = nfc.mifareclassic_AuthenticateBlock(get_uid, uid_Length, 4, 0, keyA);

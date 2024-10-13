@@ -54,35 +54,51 @@ typedef struct{
 }Error_t;
 
 typedef enum{
-  LF_mode = 0x01,
-  Lidar_mode
+  NOT_SET,
+  LF_MODE,
+  LIDAR_MODE
 }Select_mode_data_t;
 
 typedef enum{
-  Start = 0x01,
-  Stop,
-  Pause
+  NORMAL_SPEED = 0x01,
+  HIGH_SPEED
+}Select_speed_data_t;
+
+typedef enum{
+  START = 0x01,
+  STOP,
+  PAUSE
 }Select_state_data_t;
 
 typedef enum{
-  Detected = 0x01,
-  Not_detected
+  FORWARD = 0x01,
+  BACKWARD,
+  LEFT,
+  RIGHT,
+  ROTATE_LEFT,
+  ROTATE_RIGHT,
+  BRAKE,
+}Select_dir_data_t;
+
+typedef enum{
+  DETECTED = 0x01,
+  NOT_DETECTED
 }Sensor_data_t;
 
 typedef enum{
-  Normal_Accel = 0x01,
-  Regenerative_Accel
+  NORMAL_ACCEL = 0x01,
+  REGENERATIVE_ACCEL
 }Accel_data_t;
 
 typedef enum{
-  Normal_Brake = 0x01,
-  Regenerative_Brake
+  NORMAL_BRAKE = 0x01,
+  REGENERATIVE_BRAKE
 }Brake_data_t;
 
 typedef enum{
-  Home = 0x01,
-  On_station,
-  On_the_way
+  HOME = 0x01,
+  ON_STATION,
+  ON_THE_WAY
 }Position_data_t;
 
 typedef struct{
@@ -93,11 +109,12 @@ typedef struct{
   Item_get,
   SubItem_get,
   Select_mode,
-  Base_speed = 100,
-  Select_state = 2,
-  Set_Acceleration = 1,
-  Set_Breaking = 1,
-  Position = 1,
+  Base_speed,
+  Select_state,
+  Set_Direction,
+  Set_Acceleration,
+  Set_Breaking,
+  Position,
   SensorA,
   SensorB,
   Tag_position;
@@ -124,7 +141,7 @@ void Send_Ping(Param_t *param);
 
 void Set_Running_Mode(Param_t *param, Select_mode_data_t mode);
 void Set_Running_BaseSpeed(Param_t *param, uint8_t base_speed);
-void Set_Running_State(Param_t *param, Select_state_data_t state);
+void Set_Running_State(Param_t *param, Select_state_data_t state, Select_dir_data_t dir);
 void Set_Running_Accel(Param_t *param, Accel_data_t accel);
 void Set_Running_Brake(Param_t *param, Brake_data_t brake);
 void Set_Joystick(Param_t *param, uint8_t Xvalue, uint8_t Yvalue);

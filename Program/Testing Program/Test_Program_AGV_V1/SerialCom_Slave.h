@@ -53,6 +53,44 @@ typedef struct{
   Battery_overcurrent = 0x80;
 }Error_t;
 
+typedef enum{
+  NOT_SET,
+  LF_MODE,
+  LIDAR_MODE
+}Select_mode_data_t;
+
+typedef enum{
+  NORMAL_SPEED = 0x01,
+  HIGH_SPEED
+}Select_speed_data_t;
+
+typedef enum{
+  START = 0x01,
+  STOP,
+  PAUSE
+}Select_state_data_t;
+
+typedef enum{
+  DETECTED = 0x01,
+  NOT_DETECTED
+}Sensor_data_t;
+
+typedef enum{
+  NORMAL_ACCEL = 0x01,
+  REGENERATIVE_ACCEL
+}Accel_data_t;
+
+typedef enum{
+  NORMAL_BRAKE = 0x01,
+  REGENERATIVE_BRAKE
+}Brake_data_t;
+
+typedef enum{
+  HOME = 0x01,
+  ON_STATION,
+  ON_THE_WAY
+}Position_data_t;
+
 typedef struct{
   uint8_t
   data_length,
@@ -64,11 +102,11 @@ typedef struct{
   Item_get,
   SubItem_get,
   Select_mode,
-  Base_speed = 100,
-  Select_state = 2,
-  Set_Acceleration = 1,
-  Set_Breaking = 1,
-  Position = 1,
+  Base_speed,
+  Select_state,
+  Set_Acceleration,
+  Set_Braking,
+  Position,
   SensorA,
   SensorB,
   Tag_position,
@@ -86,10 +124,17 @@ typedef struct{
 
   float Battery_level;
 
-  Instruction_t instruction;
-  Error_t error_state;
-  Item_t item;
-  Sub_Item_t sub_item;
+  Instruction_t instruction_type;
+  Item_t  item_type;
+  Sub_Item_t sub_item_type;
+  Error_t error_type;
+  Select_mode_data_t run_mode_type;
+  Select_speed_data_t run_speed_type;
+  Select_state_data_t run_state_type;
+  Sensor_data_t sens_state;
+  Accel_data_t accel_type;
+  Brake_data_t brake_type;
+  Position_data_t position_type;
 }Param_t;
 
 uint8_t Length_calculator(uint8_t *data, size_t length);

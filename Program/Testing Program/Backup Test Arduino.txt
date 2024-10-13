@@ -1,8 +1,8 @@
 /*  
-  Line Following AGV Testing Program
+  Line Following AGV Program
   PT. Stechoq Robotika Indonesia
   
-  Date    : 18 SEPTEMBER 2024
+  Date    : 26 SEPTEMBER 2024
   Author  : Alfonsus Giovanni Mahendra Putra - Universitas Diponegoro
 */
 
@@ -12,7 +12,6 @@
 #include "Wire.h" 
 #include "Adafruit_NFCShield_I2C.h"
 #include "Serial_Com.h"
-#include "SoftwareSerial.h"
 //************************************************************************************************************************************************************************************
 
 
@@ -47,7 +46,6 @@
 #define RESET 3
 // ------------
 
-
 // TAG DATA ---------------------
 #define DATA_AUTH_HEADER1   0x5A
 #define DATA_AUTH_HEADER2   0xA5
@@ -59,29 +57,12 @@
 #define SENS_NUM  16
 // -----------------
 
-// TESTING SELECT ----
-//#define LINESENS_TEST
-//#define MOTOR_TEST
-#define PID_TEST
-//#define SERIAL_TEST
-// -------------------
-
-// ALGORITHM SEL --------------
-//#define USE_PLXDAQ
-#define USE_EARLY_CHECK
-//#define USE_OLD_SENS_COORDINATE
-#define USE_NEW_SENS_COORDINATE
-// ----------------------------
 
 //************************************************************************************************************************************************************************************
 
 
 /*USER PRIVATE TYPEDEF*/
 //************************************************************************************************************************************************************************************
-
-// COM TYPEDEF --
-
-// --------------
 
 // PID TYPEDEF ---------
 PIDController pid_agv_f;  // -> PID Jalan Maju
@@ -115,7 +96,6 @@ typedef struct{
 
 Tag_Data_t NFC_Tag;
 // ------------------------------------
-
 
 // SENSOR POS --
 typedef enum{
@@ -160,12 +140,10 @@ const int32_t
 sens_weight[SENS_NUM] = {0, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5, 42.5, 47.5, 52.5, 57.5, 62.5, 67.5, 72.5, 80};
 
 uint8_t
-adaptive_turn_spd,
 interval_check = 150,
 line_false_cnt,
 speed_cnt,
-break_cnt,
-sens_cnt;
+break_cnt;
 
 uint16_t 
 sens_value,
@@ -179,10 +157,6 @@ int16_t
 R_line_pos,
 L_line_pos;
 
-int
-total_weight = 0, 
-sens_count = 0;
-
 float
 line_pos,
 pid_val;
@@ -195,15 +169,14 @@ prev_tickC; // -> Timer Regenerative
 bool
 no_line = false,
 line_detected = false,
-line_turn = false,
 start = false,
 running = false;
 //************************************************************************************************************************************************************************************
 
+
 /*USER PRIVATE FUNCTION*/
 //************************************************************************************************************************************************************************************
 void motor_set(Motor_sel_t motor_sel, Run_Dir_t direction, uint8_t speed, uint8_t interval);
-void check_sensor(LineSens_sel_t sensor_sel);
 
 void read_sens(LineSens_sel_t sensor_sel);
 void calculate_pid(LineSens_sel_t sensor_sel);
@@ -220,16 +193,9 @@ NFC_Status_t NFC_writeTag(Tag_Data_t *data, uint8_t tag_type, uint16_t tag_value
 /*VOID SETUP*/
 //************************************************************************************************************************************************************************************
 void setup(){
-  // BAUD RATE SETUP --------
+  // BAUD RATE SETUP --
   Serial.begin(115200);
-  // ------------------------
-
-  // SETUP PLX DAQ ------------------------------------
-  #ifdef USE_PLXDAQ
-  Serial.println("CLEARDATA"); 
-  Serial.println("LABEL,Time,Millis,Response,Set Point");
-  #endif 
-  // --------------------------------------------------
+  // ------------------
 
   // BUTTON & SPEAKER SETUP -------
   pinMode(START_BTN, INPUT_PULLUP);
@@ -267,19 +233,6 @@ void setup(){
   // ---------------------
 
   // PID SETUP -------------------------
-  /*
-  pid_agv_f.Kp        = 1.4;     
-  pid_agv_f.Ki        = 0.000025;       
-  pid_agv_f.Kd        = 7.25; 		
-  pid_agv_f.tau       = 0.01;
-	pid_agv_f.limMax    = 100;     
-  pid_agv_f.limMin    = -100;     
-  pid_agv_f.limMaxInt = 5.0; 	   
-  pid_agv_f.limMinInt = -5.0;
-	pid_agv_f.T_sample  = SAMPLE_TIME_S;
-  PIDController_Init(&pid_agv_f);
-  */
-  
   pid_agv_f.Kp        = 0.825;     
   pid_agv_f.Ki        = 0.00002;       
   pid_agv_f.Kd        = 0.020; 		
@@ -327,34 +280,7 @@ void setup(){
 /*VOID LOOP*/
 //************************************************************************************************************************************************************************************
 void loop(){
-  #ifdef SERIAL_TEST
-  
-  #endif
-
-  #ifdef LINESENS_TEST
-  digitalWrite(RUN_LR, HIGH);
-  digitalWrite(ENA_R, LOW);
-  digitalWrite(ENA_L, LOW);
-  check_sensor(FRONT);
-
-  delay(500);
-  #endif
-
-  #ifdef MOTOR_TEST
-  digitalWrite(SPEAKER_PIN, HIGH);
-  motor_set(BOTH_MOTOR, REGENERATIVE_FORWARD, 150, 15);
-
-  if(running == true){
-    digitalWrite(SPEAKER_PIN, LOW);
-    delay(2000);
-    motor_set(BOTH_MOTOR, REGENERATIVE_BREAK, 150, 15);
-    delay(1000);
-  }
-  #endif 
-
-  #ifdef PID_TEST
-  digitalWrite(SPEAKER_PIN, HIGH);
-  agv_run(REGENERATIVE_FORWARD, 100, 5);
+  agv_run(REGENERATIVE_FORWARD, 100, 10);
   
   if(millis()-prev_tickA > interval_check && !line_detected){
     line_false_cnt++;
@@ -371,31 +297,11 @@ void loop(){
       if(line_search(FRONT, ROTATE_LEFT) == true){
         line_false_cnt = 0;
         no_line = false;
-        delay(1000);
         break;
       }
       else continue;
     }
   }
-
-  #ifdef USE_PLXDAQ
-  if(millis()-prev_tickB > 10){
-    Serial.print("DATA,");
-    Serial.print(prev_tickB);
-    Serial.print(" ,");
-    Serial.println(line_pos);
-
-    prev_tickB = millis();
-  }
-
-  #else
-  //Serial.print("Line Position: ");
-  Serial.println(line_pos);
-  //Serial.print("  ");
-  //Serial.print("PID: ");
-  //Serial.println(pid_val);
-  #endif
-  #endif
 }
 //************************************************************************************************************************************************************************************
 
@@ -449,11 +355,12 @@ void read_sens(LineSens_sel_t sensor_sel){
   #endif
 
   #ifdef USE_NEW_SENS_COORDINATE
-  total_weight = 0;
+  int 
+  total_weight = 0, 
   sens_count = 0;
 
   if(sensor_sel == FRONT){
-    for(int i=0; i<16; i++) {
+    for (int i = 0; i < 16; i++) {
       int weight = 8 - i;
       sens_value = !digitalRead(sens_pin[FRONT][i]);
       bitWrite(sens_data, i, sens_value);
@@ -461,6 +368,7 @@ void read_sens(LineSens_sel_t sensor_sel){
       total_weight += (bitRead(sens_data, i) & 0xFF) * sens_weight[i];
       sens_count += (bitRead(sens_data, i) & 0xFF);
     }
+
     line_pos = 40 - (total_weight/sens_count);
   }
   #endif
@@ -502,9 +410,6 @@ void agv_run(Run_Dir_t direction, uint8_t speed, uint8_t interval){
   digitalWrite(RUN_LR, LOW);
   digitalWrite(ENA_R, LOW);
   digitalWrite(ENA_L, LOW);
-
-  if(line_turn == true) speed = speed - 15;
-  else speed = speed;
 
   if(direction == FORWARD){
     calculate_pid(FRONT);
@@ -562,46 +467,13 @@ bool line_search(LineSens_sel_t sensor_sel, Run_Dir_t direction){
   while(1){
     read_sens(sensor_sel);
     motor_set(BOTH_MOTOR, direction, 30, 0);
-    if(line_pos >= -20 && line_pos <= 20 && line_detected){
+    if(line_pos >= -5 && line_pos <= 5 && line_detected){
       motor_set(BOTH_MOTOR, NORMAL_BREAK, 0, 0);
       break;
     }
   }
 }
 //************************************************************************************************************************************************************************************
-
-
-/*--- CHECK SENSOR FUNCTION ---*/
-//************************************************************************************************************************************************************************************
-void check_sensor(LineSens_sel_t sensor_sel){
-  calculate_pid(sensor_sel);
-  Serial.print("Sens Data: 0b");
-
-  for(int i=SENS_NUM-1; i>=0; i--){
-    Serial.print(bitRead(sens_data, i));
-  }
-  Serial.print("    ");
-  Serial.print("Line State: ");
-  Serial.print(line_detected);
-  
-  Serial.print("    ");
-  Serial.print("Right Position: ");
-  Serial.print(R_line_pos);
-  
-  Serial.print("    ");
-  Serial.print("Left Position: ");
-  Serial.print(L_line_pos);
-  
-  Serial.print("    ");
-  Serial.print("Line Position: ");
-  Serial.print(line_pos);
-
-  Serial.print("    ");
-  Serial.print("PID: ");
-  Serial.println(pid_val);
-}
-//************************************************************************************************************************************************************************************
-
 
 /*--- MOTOR CHECK FUNCTION ---*/
 //************************************************************************************************************************************************************************************
