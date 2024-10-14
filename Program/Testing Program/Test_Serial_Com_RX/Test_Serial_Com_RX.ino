@@ -8,7 +8,7 @@ Param_t parameter;
 uint8_t dummy_rx[32];
 
 void setup(){
-  Serial1.begin(115200);
+  Serial.begin(500000);
 
   lcd.init();
   lcd.backlight();
@@ -28,13 +28,13 @@ void loop(){
 
   lcd.setCursor(0, 1);
   lcd.print("Inst: ");
-  if(parameter.Instruction_get == parameter.instruction.Ping){
+  if(parameter.Instruction_get == parameter.instruction_type.Ping){
     lcd.print("P");
   }
-  else if(parameter.Instruction_get == parameter.instruction.Read){
+  else if(parameter.Instruction_get == parameter.instruction_type.Read){
     lcd.print("R");
   }
-  else if(parameter.Instruction_get == parameter.instruction.Write){
+  else if(parameter.Instruction_get == parameter.instruction_type.Write){
     lcd.print("W");
   }
 
@@ -42,12 +42,14 @@ void loop(){
   lcd.print("Item: ");
   lcd.print(parameter.Item_get); 
   
+  /*
   for(int i=0; i<parameter.data_length+3; i++){
     Serial.print("0x");
     Serial.print(parameter.get_data[i], HEX);
     Serial.print(" ");
   }
   Serial.println("");
+  */
 
   delay(100);
 }

@@ -68,8 +68,7 @@
 //#define LINESENS_TEST
 //#define MOTOR_TEST
 //#define PID_TEST
-//#define SERIAL_TEST
-#define COMMUNICATION_ON
+#define SERIAL_TEST
 // ---------------------
 
 // ALGORITHM SEL --------------
@@ -347,7 +346,9 @@ void setup(){
 /*VOID LOOP*/
 //************************************************************************************************************************************************************************************
 void loop(){
-  
+  #ifdef SERIAL_TEST
+  run_agv(parameter.Select_mode);
+  #endif
 }
 //************************************************************************************************************************************************************************************
 
@@ -628,6 +629,8 @@ void return_home(void){
 /*--- MAIN ROBOT ALGORITHM ---*/
 //************************************************************************************************************************************************************************************
 void run_agv(uint8_t agv_mode){
+  Receive_Instruction(&parameter);
+
   if(agv_mode == LF_MODE){
     if(parameter.Select_state == START){
       if(parameter.Set_Direction == FORWARD){
