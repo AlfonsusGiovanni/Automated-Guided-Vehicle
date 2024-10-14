@@ -13,7 +13,7 @@ import copy
 # ------------------
 
 # SERIAL SETUP ---------
-baudRate = 512000
+baudRate = 500000
 MaxMsgsLen = 16
 RpiPort = '/dev/serial0'
 DeskPort = 'COM9'

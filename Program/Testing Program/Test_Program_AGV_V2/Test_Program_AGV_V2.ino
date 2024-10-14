@@ -231,7 +231,7 @@ void check_agvrun(Select_dir_data_t direction, Accel_data_t accel, uint8_t speed
 //************************************************************************************************************************************************************************************
 void setup(){
   // BAUD RATE SETUP --------
-  Serial.begin(115200);
+  Serial.begin(500000);
   // ------------------------
 
   // SETUP LCD ----
@@ -347,6 +347,8 @@ void setup(){
 //************************************************************************************************************************************************************************************
 void loop(){
   #ifdef SERIAL_TEST
+  digitalWrite(SPEAKER_PIN, HIGH);
+  Receive_Instruction(&parameter);
   run_agv(parameter.Select_mode);
   #endif
 }
@@ -629,8 +631,6 @@ void return_home(void){
 /*--- MAIN ROBOT ALGORITHM ---*/
 //************************************************************************************************************************************************************************************
 void run_agv(uint8_t agv_mode){
-  Receive_Instruction(&parameter);
-
   if(agv_mode == LF_MODE){
     if(parameter.Select_state == START){
       if(parameter.Set_Direction == FORWARD){

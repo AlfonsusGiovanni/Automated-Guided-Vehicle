@@ -147,6 +147,9 @@ void Receive_Instruction(Param_t *param){
   data_len,
   len_validation;
 
+  //Serial.flush();
+  //for(int i=0; i<MAX_LEN; i++) rx_buff[i] = 0x00;
+
   // CHECK SERIAL AVAILABILITY
   if(Serial.available()){
     Serial.readBytes(rx_buff, MAX_LEN);
