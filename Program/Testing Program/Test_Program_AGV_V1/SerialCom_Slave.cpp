@@ -244,12 +244,6 @@ void Receive_Instruction(Param_t *param){
             param->Error_value = 0;
             Return_Error_Packet(param);
           }
-
-          // DATA ITEM INCORRECT
-          else{
-            param->Error_value = param->error_type.Item_err;
-            Return_Error_Packet(param);
-          }
         }
         //------------------------------------------------------------------------------------------
 

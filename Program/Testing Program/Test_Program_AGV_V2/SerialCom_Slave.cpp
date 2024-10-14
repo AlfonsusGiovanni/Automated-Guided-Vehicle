@@ -230,11 +230,26 @@ void Receive_Instruction(Param_t *param){
             param->Item_get = param->item_type.Running_State;
 
             if(rx_buff[5] == param->sub_item_type.Sub_item1){
-              param->Select_state = rx_buff[6];
-              param->Set_Direction = rx_buff[7];
+              if(rx_buff[6] == 0x01) param->Select_state = START;
+              else if(rx_buff[6] == 0x02) param->Select_state = STOP;
+              else if(rx_buff[6] == 0x03) param->Select_state = PAUSE;
+
+              if(rx_buff[7] == 0x01) param->Set_Direction = FORWARD;
+              else if(rx_buff[7] == 0x02) param->Set_Direction = BACKWARD;
+              else if(rx_buff[7] == 0x03) param->Set_Direction = LEFT;
+              else if(rx_buff[7] == 0x04) param->Set_Direction = RIGHT;
+              else if(rx_buff[7] == 0x05) param->Set_Direction = ROTATE_LEFT;
+              else if(rx_buff[7] == 0x06) param->Set_Direction = ROTATE_RIGHT;
+              else if(rx_buff[7] == 0x07) param->Set_Direction = BRAKE;
             }
-            else if(rx_buff[5] == param->sub_item_type.Sub_item2) param->Set_Acceleration = rx_buff[6];
-            else if(rx_buff[5] == param->sub_item_type.Sub_item3) param->Set_Braking = rx_buff[6];
+            else if(rx_buff[5] == param->sub_item_type.Sub_item2){
+              if(rx_buff[6] == 0x01) param->Set_Acceleration = NORMAL_ACCEL;
+              else param->Set_Acceleration = REGENERATIVE_ACCEL;
+            }
+            else if(rx_buff[5] == param->sub_item_type.Sub_item3){
+              if(rx_buff[6] == 0x01) param->Set_Braking = NORMAL_BRAKE;
+              else param->Set_Braking = REGENERATIVE_BRAKE;
+            }
       
             param->Error_value = 0;
             Return_Error_Packet(param);
@@ -248,12 +263,6 @@ void Receive_Instruction(Param_t *param){
             param->Ypos = rx_buff[6];
 
             param->Error_value = 0;
-            Return_Error_Packet(param);
-          }
-
-          // DATA ITEM INCORRECT
-          else{
-            param->Error_value = param->error_type.Item_err;
             Return_Error_Packet(param);
           }
         }

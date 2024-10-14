@@ -73,9 +73,9 @@
 
 // ALGORITHM SEL --------------
 //#define USE_PLXDAQ
-//#define USE_EARLY_CHECK
+#define USE_EARLY_CHECK
 //#define USE_OLD_SENS_COORDINATE
-//#define USE_NEW_SENS_COORDINATE
+#define USE_NEW_SENS_COORDINATE
 // ----------------------------
 
 //************************************************************************************************************************************************************************************
@@ -159,7 +159,7 @@ nfc_data[16],
 nfc_uid[4],
 NFC_Timeout = 25,
 adaptive_turn_spd,
-interval = 5,
+interval = 10,
 interval_check = 150,
 line_false_cnt,
 speed_cnt,
@@ -325,6 +325,9 @@ void setup(){
         if(line_search(FRONT, ROTATE_LEFT) == true) break;
         else continue;
       }
+      digitalWrite(SPEAKER_PIN, HIGH);
+      delay(500);
+      digitalWrite(SPEAKER_PIN, LOW);
       break;
     }
   }
@@ -333,12 +336,21 @@ void setup(){
   while(1){
     start = !digitalRead(START_BTN);
     if(start){
-      delay(1000);
+      digitalWrite(SPEAKER_PIN, HIGH);
+      delay(500);
+      digitalWrite(SPEAKER_PIN, LOW);
       break;
     }
   }
   #endif
   // -----------------------------------------------------
+
+  #ifdef SERIAL_TEST
+  while(1){
+    Receive_Instruction(&parameter);
+    if(parameter.Select_state == START) break;
+  }
+  #endif
 }
 //************************************************************************************************************************************************************************************
 
@@ -347,7 +359,6 @@ void setup(){
 //************************************************************************************************************************************************************************************
 void loop(){
   #ifdef SERIAL_TEST
-  digitalWrite(SPEAKER_PIN, HIGH);
   Receive_Instruction(&parameter);
   run_agv(parameter.Select_mode);
   #endif
@@ -462,9 +473,9 @@ void motor_handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t spee
   else speed = speed;
 
   if(direction == FORWARD){
-    running = true;
-    
     if(accel == NORMAL_ACCEL){
+      calculate_pid(FRONT);
+
       R_speed = speed + pid_val;
       L_speed = speed - pid_val;
 
@@ -478,6 +489,8 @@ void motor_handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t spee
     }
 
     else if(accel == REGENERATIVE_ACCEL){
+      calculate_pid(FRONT);
+
       digitalWrite(DIR_R, LOW);
       digitalWrite(DIR_L, HIGH);
 
@@ -503,9 +516,10 @@ void motor_handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t spee
   }
 
   else if(direction == BACKWARD){
-    running = true;
-
     if(accel == NORMAL_ACCEL){
+      calculate_pid(REAR);
+      running = true;
+
       R_speed = speed + pid_val;
       L_speed = speed - pid_val;
 
@@ -519,6 +533,8 @@ void motor_handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t spee
     }
 
     else if(accel == REGENERATIVE_ACCEL){
+      calculate_pid(REAR);
+      
       digitalWrite(DIR_R, HIGH);
       digitalWrite(DIR_L, LOW);
 
@@ -602,9 +618,9 @@ void motor_handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t spee
 bool line_search(LineSens_sel_t sensor_sel, uint8_t direction){
   while(1){
     read_sens(sensor_sel);
-    check_motor(BOTH_MOTOR, direction, NORMAL_ACCEL, NORMAL_BRAKE, 30);
-    if(line_pos >= -20 && line_pos <= 20 && line_detected){
-      check_motor(BOTH_MOTOR, BRAKE, NORMAL_ACCEL, NORMAL_BRAKE, 0);
+    motor_handler(direction, NORMAL_ACCEL, NORMAL_BRAKE, 30);
+    if(line_pos >= -35 && line_pos <= 35 && line_detected){
+      motor_handler(BRAKE, NORMAL_ACCEL, NORMAL_BRAKE, 0);
       break;
     }
   }
@@ -633,15 +649,37 @@ void return_home(void){
 void run_agv(uint8_t agv_mode){
   if(agv_mode == LF_MODE){
     if(parameter.Select_state == START){
+      calculate_pid(FRONT);
+
       if(parameter.Set_Direction == FORWARD){
-        NFC_Handler(FRONT_NFC);
-        calculate_pid(FRONT);
+        //NFC_Handler(FRONT_NFC);
       }
       else if(parameter.Set_Direction == BACKWARD){
-        NFC_Handler(REAR_NFC);
-        calculate_pid(REAR);
+        //NFC_Handler(REAR_NFC);
       }
-      motor_handler(parameter.Set_Direction, parameter.Set_Acceleration, parameter.Set_Braking, parameter.Base_speed);
+
+      if(millis()-prev_tickA > interval_check && !line_detected){
+        line_false_cnt++;
+        prev_tickA = millis();
+      }
+      else if (line_detected) line_false_cnt = 0;
+
+      if(line_false_cnt >= 5) no_line = true;
+
+      if(no_line){
+        motor_handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, 100);
+        delay(1500);
+        while(1){
+          if(line_search(FRONT, ROTATE_LEFT) == true){
+            line_false_cnt = 0;
+            no_line = false;
+            delay(1000);
+            break;
+          }
+          else continue;
+        }
+      }
+      motor_handler(parameter.Set_Direction, parameter.Set_Acceleration, parameter.Set_Braking, 100);
     }
     else if(parameter.Select_state == STOP){
       motor_handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_speed);

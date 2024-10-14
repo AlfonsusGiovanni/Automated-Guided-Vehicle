@@ -354,7 +354,7 @@ void loop(){
 
   #ifdef PID_TEST
   digitalWrite(SPEAKER_PIN, HIGH);
-  agv_run(REGENERATIVE_FORWARD, 100, 5);
+  agv_run(REGENERATIVE_FORWARD, 80, 5);
   
   if(millis()-prev_tickA > interval_check && !line_detected){
     line_false_cnt++;
@@ -362,10 +362,10 @@ void loop(){
   }
   else if (line_detected) line_false_cnt = 0;
 
-  if(line_false_cnt >= 5) no_line = true:
+  if(line_false_cnt >= 5) no_line = true;
 
   if(no_line){
-    motor_set(BOTH_MOTOR, REGENERATIVE_BREAK, 100, 25);
+    motor_set(BOTH_MOTOR, REGENERATIVE_BREAK, 80, 25);
     delay(1500);
     while(1){
       if(line_search(FRONT, ROTATE_LEFT) == true){

@@ -16,7 +16,7 @@ import copy
 baudRate = 500000
 MaxMsgsLen = 16
 UARTPort = '/dev/serial0'
-USBPort = '/dev/ttyACM1'
+USBPort = '/dev/ttyACM0'
 timeout = 1
 # ----------------------
 
@@ -127,6 +127,8 @@ class Serial_COM:
           
           self.Xpos = 0
           self.Ypos = 0
+
+          self.com_state = 0
           
           self.instruction = Instruction()
           self.error_state = Error()
@@ -134,6 +136,8 @@ class Serial_COM:
           self.sub_item = SubItem()
 
           self.running_mode = SelectModeData()
+          self.running_state = SelectStateData()
+          self.running_dir = SelectDirData()
           self.accel_mode = AccelData()
           self.brake_mode = BrakeData()
           
@@ -184,6 +188,10 @@ class Serial_COM:
         if len(rx_buff) == 4:
             if rx_buff[0] == self.Header and rx_buff[1] == self.Header:
                 self.data_length = rx_buff[2]
+                if rx_buff[3] == 0x00:
+                    self.com_state = self.error_state.No_err
+                else:
+                    self.com_state = rx_buff[3]
             self.return_data = copy.deepcopy(rx_buff)
             self.data.flushInput()
     
@@ -398,7 +406,7 @@ while True:
             print(" ".join(f"0x{byte:02X}" for byte in UART_COM.return_data))
             ping_checked = True
             print("Ping Check Complete")
-            time.sleep(1)
+            time.sleep(0.5)
             break
         else:
             print("Waiting Ping Response...")
@@ -411,7 +419,7 @@ while True:
             print(" ".join(f"0x{byte:02X}" for byte in UART_COM.return_data))
             set_mode_complete = True
             print("Set Mode Complete")
-            time.sleep(1)
+            time.sleep(0.5)
             break
         else:
             print("Waiting Running Mode Response...")
@@ -424,7 +432,7 @@ while True:
             print(" ".join(f"0x{byte:02X}" for byte in UART_COM.return_data))
             set_speed_complete = True
             print("Set Speed Complete")
-            time.sleep(1)
+            time.sleep(0.5)
             break
         else:
             print("Waiting Running Speed Response...")
@@ -437,7 +445,7 @@ while True:
             print(" ".join(f"0x{byte:02X}" for byte in UART_COM.return_data))
             set_accel_complete = True
             print("Set Accel Complete")
-            time.sleep(1)
+            time.sleep(0.5)
             break
         else:
             print("Waiting Accel Mode Response...")
@@ -450,7 +458,7 @@ while True:
             print(" ".join(f"0x{byte:02X}" for byte in UART_COM.return_data))
             set_brake_complete = True
             print("Set Brake Complete")
-            time.sleep(1)
+            time.sleep(0.5)
             break
         else:
             print("Waiting Brake Mode Response...")
@@ -460,7 +468,7 @@ while True:
     if ping_checked and set_mode_complete and set_speed_complete and set_brake_complete:
         setup_done = True
         print("All Setup Complete")
-        time.sleep(1)
+        time.sleep(0.5)
         break
 
     if setup_done:
@@ -468,4 +476,13 @@ while True:
 
 # TESTING
 while True:
-    print("Running")
+    for i in range(5):
+        UART_COM.Set_Running_State(UART_COM.running_state.START, UART_COM.running_dir.FORWARD)
+
+    for i in range(5):
+        UART_COM.Read_Running_State()
+    
+    print(" ".join(f"0x{byte:02X}" for byte in UART_COM.return_data))
+    if UART_COM.Select_state == UART_COM.running_state.START:
+        print("Running")
+        break

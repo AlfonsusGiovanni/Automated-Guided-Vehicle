@@ -112,15 +112,15 @@ typedef struct{
   Item_get,
   SubItem_get,
   Select_mode = NOT_SET,
-  Base_speed = 100,
+  Base_speed,
   Select_state = STOP,
-  Set_Direction,
-  Set_Acceleration = REGENERATIVE_ACCEL,
-  Set_Braking = REGENERATIVE_BRAKE,
-  Position = HOME,
+  Set_Direction = FORWARD,
+  Set_Acceleration,
+  Set_Braking,
+  Position,
   SensorA = NOT_DETECTED,
   SensorB = NOT_DETECTED,
-  Tag_position = HOME,
+  Tag_position,
   Error_value;
 
   uint16_t
