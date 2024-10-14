@@ -15,11 +15,10 @@ import copy
 # SERIAL SETUP ---------
 baudRate = 500000
 MaxMsgsLen = 16
-RpiPort = '/dev/serial0'
-DeskPort = 'COM9'
-timeout = 0.001
+UARTPort = '/dev/serial0'
+USBPort = '/dev/ttyACM1'
+timeout = 1
 # ----------------------
-
 
 # Instruction 
 class Instruction:
@@ -133,6 +132,10 @@ class Serial_COM:
           self.error_state = Error()
           self.item = Item()
           self.sub_item = SubItem()
+
+          self.running_mode = SelectModeData()
+          self.accel_mode = AccelData()
+          self.brake_mode = BrakeData()
           
           self.data = serial.Serial(serialPort, inputBaudRate, timeout=inputTimeout)
           
@@ -145,7 +148,8 @@ class Serial_COM:
         if len(rx_buff) == 5:
             if rx_buff[0] == self.Header and rx_buff[1] == self.Header:
                 self.data_length = rx_buff[2]
-                self.return_data = copy.deepcopy(rx_buff)
+            self.return_data = copy.deepcopy(rx_buff)
+            self.data.flushInput()
     
     def Set_Running_Mode(self, select_mode):
         msgs_len = 0x04
@@ -156,7 +160,8 @@ class Serial_COM:
         if len(rx_buff) == 4:
             if rx_buff[0] == self.Header and rx_buff[1] == self.Header:
                 self.data_length = rx_buff[2]
-                self.return_data = copy.deepcopy(rx_buff)
+            self.return_data = copy.deepcopy(rx_buff)
+            self.data.flushInput()
     
     def Set_Base_Speed(self, base_speed):
         msgs_len = 0x04
@@ -167,7 +172,8 @@ class Serial_COM:
         if len(rx_buff) == 4:
             if rx_buff[0] == self.Header and rx_buff[1] == self.Header:
                 self.data_length = rx_buff[2]
-                self.return_data = copy.deepcopy(rx_buff)
+            self.return_data = copy.deepcopy(rx_buff)
+            self.data.flushInput()
 
     def Set_Running_State(self, select_state, direction):
         msgs_len = 0x05
@@ -178,29 +184,32 @@ class Serial_COM:
         if len(rx_buff) == 4:
             if rx_buff[0] == self.Header and rx_buff[1] == self.Header:
                 self.data_length = rx_buff[2]
-                self.return_data = copy.deepcopy(rx_buff)
+            self.return_data = copy.deepcopy(rx_buff)
+            self.data.flushInput()
     
-    def Set_Running_Accel(self, set_accel):
+    def Set_Running_Accel(self, set_accel_mode):
         msgs_len = 0x04
-        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Write, self.item.Running_State, self.sub_item.Sub_item2, set_accel]
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Write, self.item.Running_State, self.sub_item.Sub_item2, set_accel_mode]
         self.data.write(tx_buff)
 
         rx_buff = self.data.read(4)
         if len(rx_buff) == 4:
             if rx_buff[0] == self.Header and rx_buff[1] == self.Header:
                 self.data_length = rx_buff[2]
-                self.return_data = copy.deepcopy(rx_buff)
+            self.return_data = copy.deepcopy(rx_buff)
+            self.data.flushInput()
     
-    def Set_Running_Brake(self, set_brake):
+    def Set_Running_Brake(self, set_brake_mode):
         msgs_len = 0x04
-        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Write, self.item.Running_State, self.sub_item.Sub_item3, set_brake]
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Write, self.item.Running_State, self.sub_item.Sub_item3, set_brake_mode]
         self.data.write(tx_buff)
 
         rx_buff = self.data.read(4)
         if len(rx_buff) == 4:
             if rx_buff[0] == self.Header and rx_buff[1] == self.Header:
                 self.data_length = rx_buff[2]
-                self.return_data = copy.deepcopy(rx_buff)
+            self.return_data = copy.deepcopy(rx_buff)
+            self.data.flushInput()
     
     def Set_Joystick(self, valueX, valueY):
         msgs_len = 0x04
@@ -212,6 +221,7 @@ class Serial_COM:
             if rx_buff[0] == self.Header and rx_buff[1] == self.Header:
                 self.data_length = rx_buff[2]
                 self.return_data = copy.deepcopy(rx_buff)
+                self.data.flushInput()
     
     def Read_Running_Mode(self):
         msgs_len = 0x02
@@ -233,8 +243,8 @@ class Serial_COM:
 
                 self.return_data = copy.deepcopy(rx_buff)
 
-            elif(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] != 0):
-                self.return_data = copy.deepcopy(rx_buff)
+            self.return_data = copy.deepcopy(rx_buff)
+            self.data.flushInput()
 
     def Read_Running_State(self):
         msgs_len = 0x02
@@ -280,8 +290,8 @@ class Serial_COM:
 
                 self.return_data = copy.deepcopy(8)
 
-            elif(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] != 0):
-                self.return_data = copy.deepcopy(rx_buff)
+            self.return_data = copy.deepcopy(rx_buff)
+            self.data.flushInput()
     
     def Read_AGV_Status(self):
         msgs_len = 0x02
@@ -310,8 +320,8 @@ class Serial_COM:
 
                 self.return_data = copy.deepcopy(rx_buff)
 
-            elif(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] != 0):
-                self.return_data = copy.deepcopy(rx_buff)
+            self.return_data = copy.deepcopy(rx_buff)
+            self.data.flushInput()
     
     def Read_Sensor_Data(self):
         msgs_len = 0x02
@@ -332,8 +342,8 @@ class Serial_COM:
                     self.SensorB = SensorData.NOT_DETECTED
                 self.return_data = copy.deepcopy(rx_buff)
 
-            elif(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] != 0):
-                self.return_data = copy.deepcopy(rx_buff)
+            self.return_data = copy.deepcopy(rx_buff)
+            self.data.flushInput()
     
     def Read_NFC_Data(self):
         msgs_len = 0x02
@@ -353,8 +363,8 @@ class Serial_COM:
                 self.Tag_value = (rx_buff[5] << 8) | rx_buff[6]
                 self.return_data = copy.deepcopy(rx_buff)
 
-            elif(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] != 0):
-                self.return_data = copy.deepcopy(rx_buff)
+            self.return_data = copy.deepcopy(rx_buff)
+            self.data.flushInput()
     
     def Read_Joystick_Data(self):
         msgs_len = 0x02
@@ -367,13 +377,95 @@ class Serial_COM:
                 self.data_length = rx_buff[2]
                 self.Xpos = rx_buff[4]
                 self.Ypos = rx_buff[5]
-                self.return_data = copy.deepcopy(rx_buff)
 
-            elif(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] != 0):
-                self.return_data = copy.deepcopy(rx_buff)
+            self.return_data = copy.deepcopy(rx_buff)
+            self.data.flushInput()
             
-# UART_COM = Serial_COM(baudRate, DeskPort, timeout)
+UART_COM = Serial_COM(baudRate, USBPort, timeout)
+
+# SETUP RUNNING
+ping_checked = False
+set_mode_complete = False
+set_speed_complete = False
+set_accel_complete = False
+set_brake_complete = False
+setup_done = False
 
 while True:
-    print("No Error")
-    time.sleep(1)
+    if not ping_checked:
+        UART_COM.Send_Ping()
+        if UART_COM.return_data[0] == UART_COM.Header and UART_COM.return_data[1] == UART_COM.Header and UART_COM.return_data[3] == 0:
+            print(" ".join(f"0x{byte:02X}" for byte in UART_COM.return_data))
+            ping_checked = True
+            print("Ping Check Complete")
+            time.sleep(1)
+            break
+        else:
+            print("Waiting Ping Response...")
+            ping_checked = False
+
+while True:
+    if not set_mode_complete:
+        UART_COM.Set_Running_Mode(UART_COM.running_mode.LF_MODE)
+        if UART_COM.return_data[0] == UART_COM.Header and UART_COM.return_data[1] == UART_COM.Header and UART_COM.return_data[3] == 0:
+            print(" ".join(f"0x{byte:02X}" for byte in UART_COM.return_data))
+            set_mode_complete = True
+            print("Set Mode Complete")
+            time.sleep(1)
+            break
+        else:
+            print("Waiting Running Mode Response...")
+            set_mode_complete = False
+
+while True:
+    if not set_speed_complete:
+        UART_COM.Set_Base_Speed(100)
+        if UART_COM.return_data[0] == UART_COM.Header and UART_COM.return_data[1] == UART_COM.Header and UART_COM.return_data[3] == 0:
+            print(" ".join(f"0x{byte:02X}" for byte in UART_COM.return_data))
+            set_speed_complete = True
+            print("Set Speed Complete")
+            time.sleep(1)
+            break
+        else:
+            print("Waiting Running Speed Response...")
+            set_speed_complete = False
+
+while True:
+    if not set_accel_complete:
+        UART_COM.Set_Running_Accel(UART_COM.accel_mode.REGENERATIVE_ACCEL)
+        if UART_COM.return_data[0] == UART_COM.Header and UART_COM.return_data[1] == UART_COM.Header and UART_COM.return_data[3] == 0:
+            print(" ".join(f"0x{byte:02X}" for byte in UART_COM.return_data))
+            set_accel_complete = True
+            print("Set Accel Complete")
+            time.sleep(1)
+            break
+        else:
+            print("Waiting Accel Mode Response...")
+            set_accel_complete = False
+
+while True:
+    if not set_brake_complete:
+        UART_COM.Set_Running_Brake(UART_COM.brake_mode.REGENERATIVE_BRAKE)
+        if UART_COM.return_data[0] == UART_COM.Header and UART_COM.return_data[1] == UART_COM.Header and UART_COM.return_data[3] == 0:
+            print(" ".join(f"0x{byte:02X}" for byte in UART_COM.return_data))
+            set_brake_complete = True
+            print("Set Brake Complete")
+            time.sleep(1)
+            break
+        else:
+            print("Waiting Brake Mode Response...")
+            set_brake_complete = False
+
+while True:
+    if ping_checked and set_mode_complete and set_speed_complete and set_brake_complete:
+        setup_done = True
+        print("All Setup Complete")
+        time.sleep(1)
+        break
+
+    if setup_done:
+        break
+
+# TESTING
+while True:
+    print("Running")
