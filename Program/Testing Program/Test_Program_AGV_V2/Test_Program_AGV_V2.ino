@@ -73,9 +73,7 @@
 
 // ALGORITHM SEL --------------
 //#define USE_PLXDAQ
-#define USE_EARLY_CHECK
-//#define USE_OLD_SENS_COORDINATE
-#define USE_NEW_SENS_COORDINATE
+//#define USE_EARLY_CHECK
 // ----------------------------
 
 //************************************************************************************************************************************************************************************
@@ -158,10 +156,14 @@ uint8_t
 nfc_data[16],
 nfc_uid[4],
 NFC_Timeout = 25,
-adaptive_turn_spd,
-interval = 10,
-interval_check = 150,
+decrease_speed,
+interval = 5,
+line_false_interval = 150,
 line_false_cnt,
+turn_check_interval = 50,
+turn_start,
+turn_end,
+turn_validation_cnt,
 speed_cnt,
 brake_cnt,
 sens_cnt;
@@ -180,7 +182,8 @@ L_line_pos;
 
 int
 total_weight = 0, 
-sens_count = 0;
+sens_count = 0,
+sens_dist[4];
 
 float
 line_pos,
@@ -189,12 +192,16 @@ pid_val;
 unsigned long
 prev_tickA, // -> Timer Deteksi Garis
 prev_tickB, // -> Timer Serial Print PLX DAQ
-prev_tickC; // -> Timer Regenerative
+prev_tickC, // -> Timer Regenerative
+prev_tickD, // -> Timer Deteksi Penanda Belokan (Deakselerasi)
+prev_tickE; // -> Timer Deteksi Penanda Belokan (Akselerasi)
 
 bool
 no_line = false,
 line_detected = false,
 line_turn = false,
+prev_line_turn = false,
+speed_down = false,
 start = false,
 running = false;
 //************************************************************************************************************************************************************************************
@@ -207,6 +214,7 @@ void read_sens(LineSens_sel_t sensor_sel);
 void calculate_pid(LineSens_sel_t sensor_sel);
 void motor_handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t speed);
 bool line_search(LineSens_sel_t sensor_sel, uint8_t direction);
+bool turn_check(void);
 void com_handler(void);
 void return_home(void);
 void run_agv(uint8_t agv_mode);
@@ -231,7 +239,7 @@ void check_agvrun(Select_dir_data_t direction, Accel_data_t accel, uint8_t speed
 //************************************************************************************************************************************************************************************
 void setup(){
   // BAUD RATE SETUP --------
-  Serial.begin(500000);
+  Serial.begin(115200);
   // ------------------------
 
   // SETUP LCD ----
@@ -348,7 +356,12 @@ void setup(){
   #ifdef SERIAL_TEST
   while(1){
     Receive_Instruction(&parameter);
-    if(parameter.Select_state == START) break;
+    if(parameter.Select_state == START){
+      digitalWrite(SPEAKER_PIN, HIGH);
+      delay(500);
+      digitalWrite(SPEAKER_PIN, LOW);
+      break;
+    }
   }
   #endif
 }
@@ -358,10 +371,7 @@ void setup(){
 /*VOID LOOP*/
 //************************************************************************************************************************************************************************************
 void loop(){
-  #ifdef SERIAL_TEST
-  Receive_Instruction(&parameter);
-  run_agv(parameter.Select_mode);
-  #endif
+  run_agv(LF_MODE);
 }
 //************************************************************************************************************************************************************************************
 
@@ -369,57 +379,11 @@ void loop(){
 /*--- READ SENSOR FUNCTION ---*/
 //************************************************************************************************************************************************************************************
 void read_sens(LineSens_sel_t sensor_sel){
-  #ifdef USE_OLD_SENS_COORDINATE
-  if(sensor_sel == FRONT){
-    for(int i=0; i<SENS_NUM; i++){
-      sens_value = !digitalRead(sens_pin[FRONT][i]);
-      bitWrite(sens_data, i, sens_value);
-    }
-  }
-
-  else if(sensor_sel == REAR){
-    // ONGOING
-  }
-
-  if     (sens_data == 0b1000000000000000) line_pos = -22;
-  else if(sens_data == 0b1100000000000000) line_pos = -20;
-  else if(sens_data == 0b1110000000000000) line_pos = -18;
-  else if(sens_data == 0b1111000000000000) line_pos = -16;
-  else if(sens_data == 0b1111100000000000) line_pos = -14;
-  else if(sens_data == 0b0111100000000000) line_pos = -12;
-  else if(sens_data == 0b0111110000000000) line_pos = -10;
-  else if(sens_data == 0b0011110000000000) line_pos = -8;
-  else if(sens_data == 0b0011111000000000) line_pos = -6;
-  else if(sens_data == 0b0001111000000000) line_pos = -5;
-  else if(sens_data == 0b0001111100000000) line_pos = -4;
-  else if(sens_data == 0b0000111100000000) line_pos = -3;
-  else if(sens_data == 0b0000111110000000) line_pos = -2;
-  else if(sens_data == 0b0000011110000000) line_pos = -1;
-  else if(sens_data == 0b0000011111000000) line_pos = -1;
-  else if(sens_data == 0b0000001111000000) line_pos = 0;
-  else if(sens_data == 0b0000001111100000) line_pos = 1;
-  else if(sens_data == 0b0000000111100000) line_pos = 1;
-  else if(sens_data == 0b0000000111110000) line_pos = 2;
-  else if(sens_data == 0b0000000011110000) line_pos = 3;
-  else if(sens_data == 0b0000000011111000) line_pos = 4;
-  else if(sens_data == 0b0000000001111000) line_pos = 5;
-  else if(sens_data == 0b0000000001111100) line_pos = 6;
-  else if(sens_data == 0b0000000000111100) line_pos = 8;
-  else if(sens_data == 0b0000000000111110) line_pos = 10;
-  else if(sens_data == 0b0000000000011110) line_pos = 12;
-  else if(sens_data == 0b0000000000011111) line_pos = 14;
-  else if(sens_data == 0b0000000000001111) line_pos = 16;
-  else if(sens_data == 0b0000000000000111) line_pos = 18;
-  else if(sens_data == 0b0000000000000011) line_pos = 20;
-  else if(sens_data == 0b0000000000000001) line_pos = 22;
-  #endif
-
-  #ifdef USE_NEW_SENS_COORDINATE
   total_weight = 0;
   sens_count = 0;
 
   if(sensor_sel == FRONT){
-    for(int i=0; i<16; i++) {
+    for(int i=0; i<16; i++){
       int weight = 8 - i;
       sens_value = !digitalRead(sens_pin[FRONT][i]);
       bitWrite(sens_data, i, sens_value);
@@ -427,9 +391,48 @@ void read_sens(LineSens_sel_t sensor_sel){
       total_weight += (bitRead(sens_data, i) & 0xFF) * sens_weight[i];
       sens_count += (bitRead(sens_data, i) & 0xFF);
     }
-    line_pos = 40 - (total_weight/sens_count);
+
+    // CEK PENANDA BELOK
+    line_turn = turn_check();
+
+    // VALIDASI PENANDA BELOK
+    if(millis() - turn_check_interval > prev_tickD && line_turn == true && turn_validation_cnt != 2){
+      turn_validation_cnt++;
+      line_pos = 0;
+      prev_tickD = millis();
+    }
+    else if(turn_validation_cnt == 2){
+      if(turn_check() == false){
+        if(turn_start == false && turn_end == false){
+          turn_start = true;
+          turn_end = false;
+          turn_validation_cnt = 0;
+        }
+
+        else if(turn_start == true && turn_end == false){
+          turn_start = true;
+          turn_end = true;
+          turn_validation_cnt = 0;
+        }
+      }
+    }
+
+    if(turn_start == true && turn_end == false) decrease_speed = 50;
+    else if(turn_start == true && turn_end == true){
+      decrease_speed = 0;
+      turn_start = false;
+      turn_end = false;
+    }
+
+    if(!line_turn){
+      line_pos = 40 - (total_weight/sens_count);
+    }
+    else line_pos = 0;
   }
-  #endif
+
+  else if(sensor_sel == REAR){
+    // NOT SET
+  }
 
   if(sens_data == 0b0000000000000000){
     line_pos = 0;
@@ -469,15 +472,12 @@ void motor_handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t spee
   digitalWrite(ENA_R, LOW);
   digitalWrite(ENA_L, LOW);
 
-  if(line_turn == true) speed = speed - 15;
-  else speed = speed;
-
   if(direction == FORWARD){
     if(accel == NORMAL_ACCEL){
       calculate_pid(FRONT);
 
-      R_speed = speed + pid_val;
-      L_speed = speed - pid_val;
+      R_speed = speed + pid_val - decrease_speed;
+      L_speed = speed - pid_val - decrease_speed;
 
       digitalWrite(DIR_R, LOW);
       digitalWrite(DIR_L, HIGH);
@@ -503,8 +503,8 @@ void motor_handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t spee
       else if(speed_cnt == speed) running = true;
 
       if(running){
-        R_speed = speed + pid_val - right_tolerance;
-        L_speed = speed - pid_val - left_tolerance;
+        R_speed = speed + pid_val - right_tolerance - decrease_speed;
+        L_speed = speed - pid_val - left_tolerance - decrease_speed;
         constrain(R_speed, 0, speed - right_tolerance);
         constrain(L_speed, 0, speed - left_tolerance);
 
@@ -520,8 +520,8 @@ void motor_handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t spee
       calculate_pid(REAR);
       running = true;
 
-      R_speed = speed + pid_val;
-      L_speed = speed - pid_val;
+      R_speed = speed + pid_val - decrease_speed;
+      L_speed = speed - pid_val - decrease_speed;
 
       digitalWrite(DIR_R, HIGH);
       digitalWrite(DIR_L, LOW);
@@ -547,8 +547,8 @@ void motor_handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t spee
       else if(speed_cnt == speed) running = true;
 
       if(running){
-        R_speed = speed + pid_val - right_tolerance;
-        L_speed = speed - pid_val - left_tolerance;
+        R_speed = speed + pid_val - right_tolerance - decrease_speed;
+        L_speed = speed - pid_val - left_tolerance - decrease_speed;
         constrain(R_speed, 0, speed - right_tolerance);
         constrain(L_speed, 0, speed - left_tolerance);
 
@@ -624,6 +624,16 @@ bool line_search(LineSens_sel_t sensor_sel, uint8_t direction){
       break;
     }
   }
+  return true;
+}
+//************************************************************************************************************************************************************************************
+
+
+/*--- TURN CHECK ALGORITHM ---*/
+//************************************************************************************************************************************************************************************
+bool turn_check(void){
+  if((bitRead(sens_data, 15) == 0b1 || bitRead(sens_data, 14) == 0b1)  && bitRead(sens_data, 7) == 0b1 && bitRead(sens_data, 8) == 0b1) return true;
+  else return false;
 }
 //************************************************************************************************************************************************************************************
 
@@ -649,16 +659,16 @@ void return_home(void){
 void run_agv(uint8_t agv_mode){
   if(agv_mode == LF_MODE){
     if(parameter.Select_state == START){
-      calculate_pid(FRONT);
-
       if(parameter.Set_Direction == FORWARD){
+        calculate_pid(FRONT);
         //NFC_Handler(FRONT_NFC);
       }
       else if(parameter.Set_Direction == BACKWARD){
+        calculate_pid(REAR);
         //NFC_Handler(REAR_NFC);
       }
 
-      if(millis()-prev_tickA > interval_check && !line_detected){
+      if(millis()-prev_tickA > line_false_interval && !line_detected){
         line_false_cnt++;
         prev_tickA = millis();
       }
@@ -975,9 +985,6 @@ void check_agvrun(Select_dir_data_t direction, Accel_data_t accel, Brake_data_t 
   digitalWrite(RUN_LR, LOW);
   digitalWrite(ENA_R, LOW);
   digitalWrite(ENA_L, LOW);
-
-  if(line_turn == true) speed = speed - 15;
-  else speed = speed;
 
   if(direction == FORWARD){
     if(accel == NORMAL_ACCEL){
