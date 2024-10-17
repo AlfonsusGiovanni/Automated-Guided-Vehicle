@@ -69,11 +69,12 @@
 //#define MOTOR_TEST
 //#define PID_TEST
 #define SERIAL_TEST
+#define USE_ADAPTIVE_SPEED
 // ---------------------
 
 // ALGORITHM SEL --------------
 //#define USE_PLXDAQ
-//#define USE_EARLY_CHECK
+#define USE_EARLY_CHECK
 // ----------------------------
 
 //************************************************************************************************************************************************************************************
@@ -163,6 +164,7 @@ line_false_cnt,
 turn_check_interval = 50,
 turn_start,
 turn_end,
+turning,
 turn_validation_cnt,
 speed_cnt,
 brake_cnt,
@@ -291,7 +293,7 @@ void setup(){
 
   // COMMUNICATION SETUP -------------------------
   parameter.Select_mode = NOT_SET,
-  parameter.Base_speed = 100;
+  parameter.Base_speed = 80;
   parameter.Select_state = STOP;
   parameter.Set_Acceleration = REGENERATIVE_ACCEL;
   parameter.Set_Braking = REGENERATIVE_BRAKE;
@@ -371,6 +373,8 @@ void setup(){
 /*VOID LOOP*/
 //************************************************************************************************************************************************************************************
 void loop(){
+  digitalWrite(SPEAKER_PIN, HIGH);
+  Receive_Instruction(&parameter);
   run_agv(LF_MODE);
 }
 //************************************************************************************************************************************************************************************
@@ -393,41 +397,34 @@ void read_sens(LineSens_sel_t sensor_sel){
     }
 
     // CEK PENANDA BELOK
+    #ifdef USE_ADAPTIVE_SPEED
     line_turn = turn_check();
+    #endif
+
+    if(!line_turn) line_pos = 40 - (total_weight/sens_count);
+    else line_pos = 0;
 
     // VALIDASI PENANDA BELOK
     if(millis() - turn_check_interval > prev_tickD && line_turn == true && turn_validation_cnt != 2){
       turn_validation_cnt++;
-      line_pos = 0;
       prev_tickD = millis();
     }
-    else if(turn_validation_cnt == 2){
-      if(turn_check() == false){
-        if(turn_start == false && turn_end == false){
-          turn_start = true;
-          turn_end = false;
-          turn_validation_cnt = 0;
-        }
-
-        else if(turn_start == true && turn_end == false){
-          turn_start = true;
-          turn_end = true;
-          turn_validation_cnt = 0;
-        }
+    
+    if(turn_validation_cnt == 2 && turning == false){
+      decrease_speed = 30;
+      turning = true;
+    }
+    else if(turn_validation_cnt == 2 && turning == true){
+      if(!line_turn){
+        decrease_speed = 0;
+        turning = false;
+        turn_validation_cnt = 0;
       }
     }
-
-    if(turn_start == true && turn_end == false) decrease_speed = 50;
-    else if(turn_start == true && turn_end == true){
-      decrease_speed = 0;
-      turn_start = false;
-      turn_end = false;
+    
+    if(turning == true && line_turn == false){
+      turn_validation_cnt = 0;
     }
-
-    if(!line_turn){
-      line_pos = 40 - (total_weight/sens_count);
-    }
-    else line_pos = 0;
   }
 
   else if(sensor_sel == REAR){
@@ -632,7 +629,8 @@ bool line_search(LineSens_sel_t sensor_sel, uint8_t direction){
 /*--- TURN CHECK ALGORITHM ---*/
 //************************************************************************************************************************************************************************************
 bool turn_check(void){
-  if((bitRead(sens_data, 15) == 0b1 || bitRead(sens_data, 14) == 0b1)  && bitRead(sens_data, 7) == 0b1 && bitRead(sens_data, 8) == 0b1) return true;
+  if(bitRead(sens_data, 15) == 0b1 && bitRead(sens_data, 0) == 0b1) return true;
+  else if(bitRead(sens_data, 14) == 0b1 && bitRead(sens_data, 1) == 0b1) return true;
   else return false;
 }
 //************************************************************************************************************************************************************************************
@@ -696,6 +694,8 @@ void run_agv(uint8_t agv_mode){
       return_home();
     }
     else{
+      if(parameter.Set_Direction == FORWARD) calculate_pid(FRONT);
+      else if(parameter.Set_Direction == BACKWARD) calculate_pid(REAR);
       motor_handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_speed);
     }
   }
