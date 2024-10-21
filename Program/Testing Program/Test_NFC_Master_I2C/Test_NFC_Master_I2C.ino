@@ -50,9 +50,23 @@ typedef enum{
   ERASE,
 }NFC_Data_Action_t;
 
+typedef enum{
+  HOME_SIGN = 0x01,
+  STATION_SIGN,
+  TURN_SIGN,
+  CROSSECTION_SIGN,
+}NFC_t;
+
 typedef struct{
-  uint8_t type;
-  uint16_t value;
+  uint8_t 
+  stored_data[16],
+  uid[4],
+  tagType,
+  timeout = 100;
+
+  uint16_t
+  tagTypeValue,
+  tagNum;
 }Tag_Data_t;
 
 Tag_Data_t NFC_Tag;
@@ -71,16 +85,7 @@ uint8_t NFC_Timeout = 25;
 
 /*USER PRIVATE FUNCTION*/
 //************************************************************************************************************************************************************************************
-NFC_Status_t readUID(uint8_t *stored_UID);
-NFC_Status_t NFC_readData(uint8_t *stored_Data);
-NFC_Status_t NFC_writeData(uint8_t *Data_to_store);
-NFC_Status_t NFC_eraseData(void);
-NFC_Status_t NFC_readTag(Tag_Data_t *data);
-NFC_Status_t NFC_writeTag(Tag_Data_t *data, uint8_t tag_type, uint16_t tag_value);
 
-
-void check_nfc_UID(void);
-void check_nfc_Data(NFC_Data_Action_t action);
 //************************************************************************************************************************************************************************************
 
 
@@ -121,14 +126,14 @@ void setup(){
 /*VOID LOOP*/
 //************************************************************************************************************************************************************************************
 void loop(){
+/*
   for(int i=0; i<100; i++){
     nfc.begin();
     nfc.SAMConfig();
     digitalWrite(VIR_VCC1, HIGH);
     digitalWrite(VIR_VCC2, LOW);
-    check_nfc_UID();
+    check_nfc_Data(READ);
   }
-
   for(int i=0; i<100; i++){
     nfc.begin();
     nfc.SAMConfig();
@@ -136,6 +141,11 @@ void loop(){
     digitalWrite(VIR_VCC2, HIGH);
     check_nfc_UID();
   }
+*/
+
+  digitalWrite(VIR_VCC1, HIGH);
+  digitalWrite(VIR_VCC2, LOW);
+  check_nfc_Data();
 }
 //************************************************************************************************************************************************************************************
 
@@ -164,7 +174,7 @@ NFC_Status_t readUID(uint8_t *stored_UID){
 
 /*--- READ DATA FROM NFC ---*/
 //************************************************************************************************************************************************************************************
-NFC_Status_t NFC_readData(uint8_t *stored_Data){
+NFC_Status_t NFC_readData(Tag_Data_t *nfc_data){
   uint8_t
   get_uid[7],
   get_data[6],
@@ -184,7 +194,7 @@ NFC_Status_t NFC_readData(uint8_t *stored_Data){
 
       if(read_success){
         for(int i=0; i<sizeof(data); i++){
-          stored_Data[i] = data[i];
+          nfc_data->stored_data[i] = data[i];
         }
         return SUCCESS;
       }
@@ -244,13 +254,14 @@ NFC_Status_t NFC_eraseData(void){
 
 /*--- READ TAG DATA ---*/
 //************************************************************************************************************************************************************************************
-NFC_Status_t NFC_readTag(Tag_Data_t *data){
+NFC_Status_t NFC_readTag(Tag_Data_t *nfc_data){
   uint8_t tag_data[16];
 
-  if(NFC_readData(tag_data) == SUCCESS){
+  if(NFC_readData(nfc_data) == SUCCESS){
     if(tag_data[0] == DATA_AUTH_HEADER1 && tag_data[1] == DATA_AUTH_HEADER2){
-      data->type = tag_data[2];
-      data->value = (tag_data[3] >> 8) | tag_data[4];
+      nfc_data->tagType = tag_data[2];
+      nfc_data->tagTypeValue = (tag_data[3] >> 8) | tag_data[4];
+      nfc_data->tagNum = (tag_data[5] >> 8) | tag_data[6];
       
       return SUCCESS;
     }
@@ -263,11 +274,13 @@ NFC_Status_t NFC_readTag(Tag_Data_t *data){
 
 /*--- WRITE TAG DATA ---*/
 //************************************************************************************************************************************************************************************
-NFC_Status_t NFC_writeTag(Tag_Data_t *data, uint8_t tag_type, uint16_t tag_value){
-  uint8_t tag_data[16] = {DATA_AUTH_HEADER1, DATA_AUTH_HEADER2, tag_type};
+NFC_Status_t NFC_writeTag(Tag_Data_t *data, NFC_t tag_sign, uint16_t tag_value, uint16_t tag_num){
+  uint8_t tag_data[16] = {DATA_AUTH_HEADER1, DATA_AUTH_HEADER2, tag_sign};
 
   tag_data[3] = (tag_value >> 8) & 0xFF;
   tag_data[4] = tag_value & 0xFF;
+  tag_data[5] = (tag_num >> 8) & 0xFF;
+  tag_data[6] = tag_num & 0xFF;
 
   if(NFC_writeData(tag_data) == SUCCESS) return SUCCESS;
   else return TAG_WRITE_ERROR;
@@ -299,36 +312,21 @@ void check_nfc_UID(void){
 
 /*--- CHECK NFC DATA ---*/
 //************************************************************************************************************************************************************************************
-void check_nfc_Data(NFC_Data_Action_t action){
+void check_nfc_Data(){
   uint8_t data_check[16];
 
-  if(action == READ){
-    if(NFC_readData(data_check) == SUCCESS){
-      Serial.print("Data: ");
-      for(int i=0; i<sizeof(data_check); i++){
-        Serial.print("0x");
-        Serial.print(data_check[i], HEX);
-        Serial.print(" ");
-      }
-      Serial.println("(READ DATA SUCCESS)");
+  if(NFC_readData(&NFC_Tag) == SUCCESS){
+    Serial.print("Data: ");
+    for(int i=0; i<sizeof(data_check); i++){
+      Serial.print("0x");
+      Serial.print(data_check[i], HEX);
+      Serial.print(" ");
     }
-
-    else{
-      Serial.println("(CANT READ DATA FROM CARD)");
-    }
+    Serial.println("(READ DATA SUCCESS)");
   }
-  
-  else if(action == WRITE){
-    uint8_t data_write[16];
-    for(int i=0; i<sizeof(data_write); i++) data_write[i] = 0xFF;
 
-    if(NFC_writeData(data_write)){
-      Serial.println("(WRITE DATA SUCCESS)");
-    }
-
-    else{
-      Serial.println("(CANT WRITE DATA TO CARD)");
-    }
+  else{
+    Serial.println("(CANT READ DATA FROM CARD)");
   }
 }
 //************************************************************************************************************************************************************************************

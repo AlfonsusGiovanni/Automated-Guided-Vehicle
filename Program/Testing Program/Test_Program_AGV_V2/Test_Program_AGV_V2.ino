@@ -52,7 +52,6 @@
 #define DUMMY_RESET 2
 // -------------------
 
-
 // TAG DATA ---------------------
 #define DATA_AUTH_HEADER1   0x5A
 #define DATA_AUTH_HEADER2   0xA5
@@ -68,13 +67,13 @@
 //#define LINESENS_TEST
 //#define MOTOR_TEST
 //#define PID_TEST
-#define SERIAL_TEST
-#define USE_ADAPTIVE_SPEED
+//#define SERIAL_TEST
+//#define USE_ADAPTIVE_SPEED
 // ---------------------
 
 // ALGORITHM SEL --------------
 //#define USE_PLXDAQ
-#define USE_EARLY_CHECK
+//#define USE_EARLY_CHECK
 // ----------------------------
 
 //************************************************************************************************************************************************************************************
@@ -96,7 +95,7 @@ PIDController pid_agv_f;  // -> PID Jalan Maju
 PIDController pid_agv_b;  // -> PID Jalan Mundur
 // ---------------------
 
-// NFC TYPEDEF ------------------------
+// NFC TYPEDEF ---------------------------
 Adafruit_PN532 nfc(IRQ_NFC1, DUMMY_RESET);
 
 typedef enum{
@@ -116,13 +115,19 @@ typedef enum{
 }NFC_Select_t;
 
 typedef struct{
-  uint8_t type;
-  uint16_t value;
+  uint8_t 
+  stored_data[16],
+  uid[4],
+  tagType,
+  timeout = 100;
+
+  uint16_t
+  tagTypeValue,
+  tagNum;
 }Tag_Data_t;
 
 Tag_Data_t NFC_Tag;
-// ------------------------------------
-
+// ---------------------------------------
 
 // SENSOR POS --
 typedef enum{
@@ -156,7 +161,7 @@ sens_weight[SENS_NUM] = {0, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5, 42.5, 47.5,
 uint8_t
 nfc_data[16],
 nfc_uid[4],
-NFC_Timeout = 25,
+NFC_Timeout = 20,
 decrease_speed,
 interval = 5,
 line_false_interval = 150,
@@ -184,8 +189,7 @@ L_line_pos;
 
 int
 total_weight = 0, 
-sens_count = 0,
-sens_dist[4];
+sens_count = 0;
 
 float
 line_pos,
@@ -300,7 +304,7 @@ void setup(){
   parameter.Position = HOME;
   parameter.SensorA = NOT_DETECTED;
   parameter.SensorB = NOT_DETECTED;
-  parameter.Tag_position = HOME;
+  parameter.Tag_sign = HOME_SIGN;
   // ---------------------------------------------
 
   // PID SETUP -----------------------
@@ -338,6 +342,7 @@ void setup(){
       digitalWrite(SPEAKER_PIN, HIGH);
       delay(500);
       digitalWrite(SPEAKER_PIN, LOW);
+      delay(500);
       break;
     }
   }
@@ -349,6 +354,7 @@ void setup(){
       digitalWrite(SPEAKER_PIN, HIGH);
       delay(500);
       digitalWrite(SPEAKER_PIN, LOW);
+      delay(500);
       break;
     }
   }
@@ -362,10 +368,17 @@ void setup(){
       digitalWrite(SPEAKER_PIN, HIGH);
       delay(500);
       digitalWrite(SPEAKER_PIN, LOW);
+      delay(500);
       break;
     }
   }
   #endif
+
+  parameter.Select_mode = LF_MODE;
+  parameter.Select_state = START;
+  parameter.Set_Direction = FORWARD;
+  NFC_Tag.tagType = HOME_SIGN;
+  Serial.println("START");
 }
 //************************************************************************************************************************************************************************************
 
@@ -374,8 +387,18 @@ void setup(){
 //************************************************************************************************************************************************************************************
 void loop(){
   digitalWrite(SPEAKER_PIN, HIGH);
-  Receive_Instruction(&parameter);
-  run_agv(LF_MODE);
+
+  if(NFC_Tag.tagType == STATION_SIGN){
+    motor_handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, 50);
+  }
+  else run_agv(LF_MODE);
+  /*
+  Serial.print(NFC_Tag.tagType);
+  Serial.print(" ");
+  Serial.print(NFC_Tag.tagTypeValue);
+  Serial.print(" ");
+  Serial.println(NFC_Tag.tagNum);
+  */
 }
 //************************************************************************************************************************************************************************************
 
@@ -396,35 +419,7 @@ void read_sens(LineSens_sel_t sensor_sel){
       sens_count += (bitRead(sens_data, i) & 0xFF);
     }
 
-    // CEK PENANDA BELOK
-    #ifdef USE_ADAPTIVE_SPEED
-    line_turn = turn_check();
-    #endif
-
-    if(!line_turn) line_pos = 40 - (total_weight/sens_count);
-    else line_pos = 0;
-
-    // VALIDASI PENANDA BELOK
-    if(millis() - turn_check_interval > prev_tickD && line_turn == true && turn_validation_cnt != 2){
-      turn_validation_cnt++;
-      prev_tickD = millis();
-    }
-    
-    if(turn_validation_cnt == 2 && turning == false){
-      decrease_speed = 30;
-      turning = true;
-    }
-    else if(turn_validation_cnt == 2 && turning == true){
-      if(!line_turn){
-        decrease_speed = 0;
-        turning = false;
-        turn_validation_cnt = 0;
-      }
-    }
-    
-    if(turning == true && line_turn == false){
-      turn_validation_cnt = 0;
-    }
+    line_pos = 40 - (total_weight/sens_count);
   }
 
   else if(sensor_sel == REAR){
@@ -659,13 +654,19 @@ void run_agv(uint8_t agv_mode){
     if(parameter.Select_state == START){
       if(parameter.Set_Direction == FORWARD){
         calculate_pid(FRONT);
-        //NFC_Handler(FRONT_NFC);
+        if(millis() - prev_tickD > 100){
+          NFC_Handler(FRONT_NFC);
+          prev_tickD = millis();
+        }
       }
       else if(parameter.Set_Direction == BACKWARD){
         calculate_pid(REAR);
-        //NFC_Handler(REAR_NFC);
+        if(millis() - prev_tickD > 100){
+          NFC_Handler(FRONT_NFC);
+          prev_tickD = millis();
+        }
       }
-
+      
       if(millis()-prev_tickA > line_false_interval && !line_detected){
         line_false_cnt++;
         prev_tickA = millis();
@@ -675,7 +676,7 @@ void run_agv(uint8_t agv_mode){
       if(line_false_cnt >= 5) no_line = true;
 
       if(no_line){
-        motor_handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, 100);
+        motor_handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, 50);
         delay(1500);
         while(1){
           if(line_search(FRONT, ROTATE_LEFT) == true){
@@ -687,7 +688,7 @@ void run_agv(uint8_t agv_mode){
           else continue;
         }
       }
-      motor_handler(parameter.Set_Direction, parameter.Set_Acceleration, parameter.Set_Braking, 100);
+      motor_handler(parameter.Set_Direction, parameter.Set_Acceleration, parameter.Set_Braking, 50);
     }
     else if(parameter.Select_state == STOP){
       motor_handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_speed);
@@ -709,20 +710,26 @@ void run_agv(uint8_t agv_mode){
 
 /*--- NFC TAG READ HANDLER ---*/
 //************************************************************************************************************************************************************************************
-void NFC_Handler(NFC_Select_t sel){
-  parameter.Tag_position = NFC_Tag.type;
-  parameter.Tag_value = NFC_Tag.value;
-
-  if(sel == FRONT_NFC){
+void NFC_Handler(NFC_Select_t select){
+  if(select == FRONT_NFC){
     digitalWrite(VIR_VCC1, HIGH);
     digitalWrite(VIR_VCC2, LOW);
+
+    NFC_readTag(&NFC_Tag);
+    parameter.Tag_sign = NFC_Tag.tagType;
+    parameter.Tag_value = NFC_Tag.tagTypeValue;
+    parameter.Tag_num = NFC_Tag.tagNum;
   }
 
-  else if(sel == REAR_NFC){
+  else if(select == REAR_NFC){
     digitalWrite(VIR_VCC1, LOW);
     digitalWrite(VIR_VCC2, HIGH);
+
+    NFC_readTag(&NFC_Tag);
+    parameter.Tag_sign = NFC_Tag.tagType;
+    parameter.Tag_value = NFC_Tag.tagTypeValue;
+    parameter.Tag_num = NFC_Tag.tagNum;
   }
-  NFC_readTag(&NFC_Tag);
 }
 //************************************************************************************************************************************************************************************
 
@@ -737,7 +744,7 @@ NFC_Status_t NFC_readData(uint8_t *stored_Data){
   uid_Length,
   read_success;
 
-  read_success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, get_uid, &uid_Length);
+  read_success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, get_uid, &uid_Length, NFC_Timeout);
 
   if(read_success && uid_Length == 4){
     read_success = nfc.mifareclassic_AuthenticateBlock(get_uid, uid_Length, 4, 0, keyA);
@@ -772,7 +779,7 @@ NFC_Status_t NFC_writeData(uint8_t *Data_to_store){
   read_success,
   write_success;
 
-  read_success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, get_uid, &uid_Length);
+  read_success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, get_uid, &uid_Length, NFC_Timeout);
 
   if(read_success && uid_Length == 4){
     read_success = nfc.mifareclassic_AuthenticateBlock(get_uid, uid_Length, 4, 0, keyA);
@@ -797,8 +804,9 @@ NFC_Status_t NFC_readTag(Tag_Data_t *data){
 
   if(NFC_readData(tag_data) == SUCCESS){
     if(tag_data[0] == DATA_AUTH_HEADER1 && tag_data[1] == DATA_AUTH_HEADER2){
-      data->type = tag_data[2];
-      data->value = (tag_data[3] >> 8) | tag_data[4];
+      data->tagType = tag_data[2];
+      data->tagTypeValue = (tag_data[3] >> 8) | tag_data[4];
+      data->tagNum = (tag_data[5] >> 8) | tag_data[6];
       
       return SUCCESS;
     }

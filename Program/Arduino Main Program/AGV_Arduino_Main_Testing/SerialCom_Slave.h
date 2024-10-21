@@ -102,7 +102,8 @@ typedef enum{
 }Position_data_t;
 
 typedef enum{
-  HOME_SIGN = 0x01,
+  NONE_SIGN,
+  HOME_SIGN,
   STATION_SIGN,
   TURN_SIGN,
   CROSSECTION_SIGN,

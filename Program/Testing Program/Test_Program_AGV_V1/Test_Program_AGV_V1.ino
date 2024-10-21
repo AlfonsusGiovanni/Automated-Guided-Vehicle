@@ -61,14 +61,14 @@
 
 // TESTING SELECT ----
 //#define LINESENS_TEST
-//#define MOTOR_TEST
-#define PID_TEST
+#define MOTOR_TEST
+//#define PID_TEST
 //#define SERIAL_TEST
 // -------------------
 
 // ALGORITHM SEL --------------
 //#define USE_PLXDAQ
-#define USE_EARLY_CHECK
+//#define USE_EARLY_CHECK
 //#define USE_OLD_SENS_COORDINATE
 #define USE_NEW_SENS_COORDINATE
 // ----------------------------
@@ -256,14 +256,13 @@ void setup(){
 
   pinMode(RUN_LR, OUTPUT);
 
-  digitalWrite(RUN_LR, HIGH);
-  delay(20);
-  digitalWrite(ENA_R, LOW);
-  digitalWrite(ENA_L, LOW);
-  delay(20);
-  analogWrite(PWM_R, 0);
-  analogWrite(PWM_L, 0);
-  delay(20);
+  digitalWrite(ENA_R, HIGH);
+  digitalWrite(PWM_R, HIGH);
+  digitalWrite(DIR_R, HIGH);
+
+  digitalWrite(ENA_L, HIGH);
+  digitalWrite(PWM_L, HIGH);
+  digitalWrite(DIR_L, HIGH);
   // ---------------------
 
   // PID SETUP -------------------------
@@ -342,14 +341,7 @@ void loop(){
 
   #ifdef MOTOR_TEST
   digitalWrite(SPEAKER_PIN, HIGH);
-  motor_set(BOTH_MOTOR, REGENERATIVE_FORWARD, 150, 15);
-
-  if(running == true){
-    digitalWrite(SPEAKER_PIN, LOW);
-    delay(2000);
-    motor_set(BOTH_MOTOR, REGENERATIVE_BREAK, 150, 15);
-    delay(1000);
-  }
+  motor_set(BOTH_MOTOR, FORWARD, 30, 15);
   #endif 
 
   #ifdef PID_TEST
@@ -511,7 +503,7 @@ void agv_run(Run_Dir_t direction, uint8_t speed, uint8_t interval){
     R_speed = speed + pid_val;
     L_speed = speed - pid_val;
 
-    digitalWrite(DIR_R, LOW);
+    digitalWrite(DIR_R, HIGH);
     digitalWrite(DIR_L, HIGH);
 
     constrain(R_speed, 0, speed);
@@ -523,7 +515,7 @@ void agv_run(Run_Dir_t direction, uint8_t speed, uint8_t interval){
   else if(direction == REGENERATIVE_FORWARD){
     calculate_pid(FRONT);
 
-    digitalWrite(DIR_R, LOW);
+    digitalWrite(DIR_R, HIGH);
     digitalWrite(DIR_L, HIGH);
 
     if(millis()-prev_tickC > interval && speed_cnt <= speed && !running){
@@ -635,13 +627,13 @@ void motor_set(Motor_sel_t motor_sel, Run_Dir_t direction, uint8_t speed, uint8_
     if(direction == FORWARD){
       running = true;
       digitalWrite(DIR_R, LOW);
-      digitalWrite(DIR_L, HIGH);
+      digitalWrite(DIR_L, LOW);
       analogWrite(PWM_R, speed);
       analogWrite(PWM_L, speed);
     }
 
     else if(direction == REGENERATIVE_FORWARD){
-      digitalWrite(DIR_R, LOW);
+      digitalWrite(DIR_R, HIGH);
       digitalWrite(DIR_L, HIGH);
 
       if(millis()-prev_tickC > interval && speed_cnt <= speed && !running){
@@ -661,14 +653,14 @@ void motor_set(Motor_sel_t motor_sel, Run_Dir_t direction, uint8_t speed, uint8_
 
     else if(direction == BACKWARD){
       running = true;
-      digitalWrite(DIR_R, HIGH);
+      digitalWrite(DIR_R, LOW);
       digitalWrite(DIR_L, LOW);
       analogWrite(PWM_R, speed);
       analogWrite(PWM_L, speed);
     }
 
     else if(direction == REGENERATIVE_BACKWARD){
-      digitalWrite(DIR_R, HIGH);
+      digitalWrite(DIR_R, LOW);
       digitalWrite(DIR_L, LOW);
 
       if(millis()-prev_tickC > interval && speed_cnt <= speed && !running){
@@ -688,14 +680,14 @@ void motor_set(Motor_sel_t motor_sel, Run_Dir_t direction, uint8_t speed, uint8_
 
     else if(direction == ROTATE_LEFT){
       digitalWrite(DIR_R, LOW);
-      digitalWrite(DIR_L, LOW);
+      digitalWrite(DIR_L, HIGH);
       analogWrite(PWM_R, speed);
       analogWrite(PWM_L, speed);
     }
 
     else if(direction == ROTATE_RIGHT){
       digitalWrite(DIR_R, HIGH);
-      digitalWrite(DIR_L, HIGH);
+      digitalWrite(DIR_L, LOW);
       analogWrite(PWM_R, speed);
       analogWrite(PWM_L, speed);
     }
