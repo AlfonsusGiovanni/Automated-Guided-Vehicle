@@ -8,7 +8,7 @@ Param_t parameter;
 uint8_t dummy_rx[32];
 
 void setup(){
-  Serial.begin(500000);
+  Serial.begin(115200);
 
   lcd.init();
   lcd.backlight();

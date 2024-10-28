@@ -73,6 +73,10 @@ typedef enum{
 typedef enum{
   FORWARD = 0x01,
   BACKWARD,
+  FORWARD_LEFT,
+  FORWARD_RIGHT,
+  BACKWARD_LEFT,
+  BACKWARD_RIGHT,
   LEFT,
   RIGHT,
   ROTATE_LEFT,
@@ -101,6 +105,14 @@ typedef enum{
   ON_THE_WAY
 }Position_data_t;
 
+typedef enum{
+  NONE_SIGN,
+  HOME_SIGN,
+  STATION_SIGN,
+  TURN_SIGN,
+  CROSSECTION_SIGN,
+}NFC_t;
+
 typedef struct{
   uint8_t
   data_length,
@@ -120,14 +132,15 @@ typedef struct{
   Position,
   SensorA,
   SensorB,
-  Tag_position,
+  Tag_sign,
   Error_value;
 
   uint16_t
   Pos_value,
   Send_counter,
   Pickup_counter,
-  Tag_value;
+  Tag_value,
+  Tag_num;
 
   int16_t
   Xpos,
@@ -147,6 +160,7 @@ typedef struct{
   Accel_data_t accel_type;
   Brake_data_t brake_type;
   Position_data_t position_type;
+  NFC_t sign_type;
 }Param_t;
 
 uint8_t Length_calculator(uint8_t *data, size_t length);

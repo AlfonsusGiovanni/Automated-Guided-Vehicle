@@ -12,19 +12,21 @@ import copy
 # ------------------
 
 # SERIAL SETUP ---------
-baudRate = 115200
+baudRate = 500000
 MaxMsgsLen = 16
-UARTPort = '/dev/serial0'
-USBPort = '/dev/ttyACM0'
-timeout = 1
+UARTPort = '/dev/serial1'
+USBPort = '/dev/ttyUSB1'
+ArduinoPort = 'COM17'
+timeout = 0
 # ----------------------
 
-# Instruction 
+# Instruction
 class Instruction:
     Ping = 0x01
     Read = 0x02
     Write = 0x03
 
+# Command Item
 class Item:
     Running_Mode = 0x01
     Running_State = 0x02
@@ -33,11 +35,13 @@ class Item:
     NFC_Data = 0x05
     Joystick_Data = 0x06
 
+# Command Sub Item
 class SubItem:
     Sub_item1 = 0x01
     Sub_item2 = 0x02
     Sub_item3 = 0x03
 
+# Command Error
 class Error:
     No_err = 0x00
     Instruction_err = 0x01
@@ -49,15 +53,18 @@ class Error:
     Battery_overvoltage = 0x40
     Battery_overcurrent = 0x80
 
+# Select Mode
 class SelectModeData:
     NOT_SET = 0x00
     LF_MODE = 0x01
     LIDAR_MODE = 0x02
 
+# Select Speed
 class SelectSpeedData:
     NORMAL_SPEED = 0x01
     HIGH_SPEED = 0x02
 
+# Select
 class SelectStateData:
     START = 0x01
     STOP = 0x02
@@ -66,11 +73,15 @@ class SelectStateData:
 class SelectDirData:
     FORWARD = 0x01
     BACKWARD = 0x02
-    LEFT = 0x03
-    RIGHT = 0x04
-    ROTATE_LEFT = 0x05
-    ROTATE_RIGHT = 0x06
-    BRAKE = 0x07
+    FORWARD_LEFT = 0x03
+    FORWARD_RIGHT = 0x04
+    BACKWARD_LEFT = 0x05
+    BACKWARD_RIGHT = 0x06
+    LEFT = 0x07
+    RIGHT = 0x08
+    ROTATE_LEFT = 0x09
+    ROTATE_RIGHT = 0x0A
+    BRAKE = 0x0B
 
 class SensorData:
     DETECTED = 0x01
@@ -101,36 +112,37 @@ class Serial_COM:
           self.baud = inputBaudRate
           self.port = serialPort
           self.timeout = inputTimeout
-          
+
           self.Header = 0xFF
 
-          self.return_data = bytearray(16)
+          self.return_data = arr.array('B', [0]*16)
+          self.flush_return = arr.array('B', [0]*16)
           self.data_length = 0
           self.Instruction_get = 0
           self.Item_get = 0
           self.SubItem_get = 0
-          
+
           self.Select_mode = SelectModeData.NOT_SET
           self.Base_speed = 0
-          
-          self.Select_state = SelectStateData.STOP
-          self.Set_Direction = SelectDirData.FORWARD
-          self.Set_Acceleration = AccelData.NORMAL_ACCEL
-          self.Set_Braking = BrakeData.NORMAL_BRAKE
-          
-          self.Position = PositionData.HOME
+
+          self.Select_state = 0
+          self.Set_Direction = 0
+          self.Set_Acceleration = 0
+          self.Set_Braking = 0
+
+          self.Position = 0
           self.Pos_value = 0
           self.Send_counter = 0
           self.Pickup_counter = 0
-          self.Tag_sign = NFCSignData.HOME_SIGN
+          self.Tag_sign = 0
           self.Tag_value = 0
           self.Tag_num = 0
-          
+
           self.SensorA = SensorData.NOT_DETECTED
           self.SensorB = SensorData.NOT_DETECTED
-          
+
           self.Battery_level = 0.0
-          
+
           self.Joystick_X = 0
           self.Joystick_Y = 0
 
@@ -144,12 +156,16 @@ class Serial_COM:
           self.running_mode = SelectModeData()
           self.running_state = SelectStateData()
           self.running_dir = SelectDirData()
+          self.running_speed = SelectSpeedData()
           self.accel_mode = AccelData()
           self.brake_mode = BrakeData()
-          
+          self.sign_data = NFCSignData()
+
           self.data = serial.Serial(serialPort, inputBaudRate, timeout=inputTimeout)
-          
+
     def Send_Ping(self):
+        self.data.flush()
+
         msgs_len = 0x01
         tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Ping]
         self.data.write(tx_buff)
@@ -159,9 +175,10 @@ class Serial_COM:
             if rx_buff[0] == self.Header and rx_buff[1] == self.Header:
                 self.data_length = rx_buff[2]
             self.return_data = copy.deepcopy(rx_buff)
-            self.data.flushInput()
-    
+
     def Set_Running_Mode(self, select_mode):
+        self.data.flush()
+        
         self.Select_mode = select_mode
 
         msgs_len = 0x04
@@ -173,13 +190,17 @@ class Serial_COM:
             if rx_buff[0] == self.Header and rx_buff[1] == self.Header:
                 self.data_length = rx_buff[2]
             self.return_data = copy.deepcopy(rx_buff)
-            self.data.flushInput()
-    
+
     def Set_Base_Speed(self, base_speed):
-        self.Base_speed = base_speed
+        self.data.flush()
+
+        if base_speed == self.running_speed.NORMAL_SPEED:
+            self.Base_speed = 80
+        elif base_speed == self.running_speed.HIGH_SPEED:
+            self.Base_speed = 100
 
         msgs_len = 0x04
-        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Write, self.item.Running_Mode, self.sub_item.Sub_item2, base_speed]
+        tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Write, self.item.Running_Mode, self.sub_item.Sub_item2, self.Base_speed]
         self.data.write(tx_buff)
 
         rx_buff = self.data.read(4)
@@ -187,9 +208,10 @@ class Serial_COM:
             if rx_buff[0] == self.Header and rx_buff[1] == self.Header:
                 self.data_length = rx_buff[2]
             self.return_data = copy.deepcopy(rx_buff)
-            self.data.flushInput()
 
     def Set_Running_State(self, select_state, direction):
+        self.data.flush()
+        
         self.Select_state = select_state
         self.Set_Direction = direction
 
@@ -206,9 +228,10 @@ class Serial_COM:
                 else:
                     self.com_state = rx_buff[3]
             self.return_data = copy.deepcopy(rx_buff)
-            self.data.flushInput()
-    
+
     def Set_Running_Accel(self, set_accel_mode):
+        self.data.flush()
+        
         self.Set_Acceleration = set_accel_mode
 
         msgs_len = 0x04
@@ -220,9 +243,10 @@ class Serial_COM:
             if rx_buff[0] == self.Header and rx_buff[1] == self.Header:
                 self.data_length = rx_buff[2]
             self.return_data = copy.deepcopy(rx_buff)
-            self.data.flushInput()
-    
+
     def Set_Running_Brake(self, set_brake_mode):
+        self.data.flush()
+        
         self.Set_Braking
 
         msgs_len = 0x04
@@ -234,9 +258,10 @@ class Serial_COM:
             if rx_buff[0] == self.Header and rx_buff[1] == self.Header:
                 self.data_length = rx_buff[2]
             self.return_data = copy.deepcopy(rx_buff)
-            self.data.flushInput()
-    
+
     def Set_Joystick(self, valueX, valueY):
+        self.data.flush()
+
         self.Joystick_X = valueX
         self.Joystick_Y = valueY
 
@@ -249,9 +274,10 @@ class Serial_COM:
             if rx_buff[0] == self.Header and rx_buff[1] == self.Header:
                 self.data_length = rx_buff[2]
                 self.return_data = copy.deepcopy(rx_buff)
-                self.data.flushInput()
-    
+
     def Read_Running_Mode(self):
+        self.data.flush()
+        
         msgs_len = 0x02
         tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Read, self.item.Running_Mode]
         self.data.write(tx_buff)
@@ -268,13 +294,11 @@ class Serial_COM:
                 else:
                     self.Select_mode = SelectModeData.LIDAR_MODE
                 self.Base_speed = rx_buff[5]
-
                 self.return_data = copy.deepcopy(rx_buff)
 
-            self.return_data = copy.deepcopy(rx_buff)
-            self.data.flushInput()
-
     def Read_Running_State(self):
+        self.data.flush()
+
         msgs_len = 0x02
         tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Read, self.item.Running_State]
         self.data.write(tx_buff)
@@ -316,12 +340,11 @@ class Serial_COM:
                 else:
                     self.Set_Braking = BrakeData.REGENERATIVE_BRAKE
 
-                self.return_data = copy.deepcopy(8)
+                self.return_data = copy.deepcopy(rx_buff)
 
-            self.return_data = copy.deepcopy(rx_buff)
-            self.data.flushInput()
-    
     def Read_AGV_Status(self):
+        self.data.flush()
+
         msgs_len = 0x02
         tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Read, self.item.AGV_Status]
         self.data.write(tx_buff)
@@ -345,13 +368,12 @@ class Serial_COM:
                 voltage_array = arr.array('B', [rx_buff[11], rx_buff[12], rx_buff[13], rx_buff[14]])
                 voltage_data = bytes(voltage_array)
                 self.Battery_level = struct.unpack('f', voltage_data)[0]
-
-                self.return_data = copy.deepcopy(rx_buff)
-
+            
             self.return_data = copy.deepcopy(rx_buff)
-            self.data.flushInput()
-    
+
     def Read_Sensor_Data(self):
+        self.data.flush()
+
         msgs_len = 0x02
         tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Read, self.item.Sensor_Data]
         self.data.write(tx_buff)
@@ -368,12 +390,12 @@ class Serial_COM:
                     self.SensorB = SensorData.DETECTED
                 else:
                     self.SensorB = SensorData.NOT_DETECTED
-                self.return_data = copy.deepcopy(rx_buff)
-
+                
             self.return_data = copy.deepcopy(rx_buff)
-            self.data.flushInput()
-    
+
     def Read_NFC_Data(self):
+        self.data.flush()
+
         msgs_len = 0x02
         tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Read, self.item.NFC_Data]
         self.data.write(tx_buff)
@@ -382,7 +404,7 @@ class Serial_COM:
         if len(rx_buff) == 9:
             if(rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[3] == 0):
                 self.data_length = rx_buff[2]
-                
+
                 if(rx_buff[4] == 0x01):
                     self.Tag_sign = NFCSignData.HOME_SIGN
                 elif(rx_buff[4] == 0x02):
@@ -394,12 +416,12 @@ class Serial_COM:
 
                 self.Tag_value = (rx_buff[5] << 8) | rx_buff[6]
                 self.Tag_num = (rx_buff[7] << 8) | rx_buff[8]
-                self.return_data = copy.deepcopy(rx_buff)
-
+            
             self.return_data = copy.deepcopy(rx_buff)
-            self.data.flushInput()
-    
+
     def Read_Joystick_Data(self):
+        self.data.flush()
+        
         msgs_len = 0x02
         tx_buff = [self.Header, self.Header, msgs_len, self.instruction.Read, self.item.Joystick_Data]
         self.data.write(tx_buff)
@@ -412,9 +434,10 @@ class Serial_COM:
                 self.Joystick_Y = rx_buff[5]
 
             self.return_data = copy.deepcopy(rx_buff)
-            self.data.flushInput()
 
     def Initialize(self, set_runmode, set_basespeed, set_accel, set_brake):
+        self.return_data = copy.deepcopy(self.flush_return)
+
         ping_checked = False
         set_mode_complete = False
         set_speed_complete = False
@@ -424,66 +447,76 @@ class Serial_COM:
 
         while True:
             if not ping_checked:
-                self.Send_Ping()
                 if self.return_data[0] == self.Header and self.return_data[1] == self.Header and self.return_data[3] == 0:
                     print(" ".join(f"0x{byte:02X}" for byte in self.return_data))
                     ping_checked = True
                     print("Ping Check Complete")
+                    self.return_data = copy.deepcopy(self.flush_return)
                     time.sleep(0.5)
                     break
                 else:
+                    for i in range(100):
+                        self.Send_Ping()
                     print("Waiting Ping Response...")
                     ping_checked = False
 
         while True:
             if not set_mode_complete:
-                self.Set_Running_Mode(set_runmode)
                 if self.return_data[0] == self.Header and self.return_data[1] == self.Header and self.return_data[3] == 0:
                     print(" ".join(f"0x{byte:02X}" for byte in self.return_data))
                     set_mode_complete = True
                     print("Set Mode Complete")
+                    self.return_data = copy.deepcopy(self.flush_return)
                     time.sleep(0.5)
                     break
                 else:
+                    for i in range(100):
+                        self.Set_Running_Mode(set_runmode)
                     print("Waiting Running Mode Response...")
                     set_mode_complete = False
 
         while True:
             if not set_speed_complete:
-                self.Set_Base_Speed(set_basespeed)
                 if self.return_data[0] == self.Header and self.return_data[1] == self.Header and self.return_data[3] == 0:
                     print(" ".join(f"0x{byte:02X}" for byte in self.return_data))
                     set_speed_complete = True
                     print("Set Speed Complete")
+                    self.return_data = copy.deepcopy(self.flush_return)
                     time.sleep(0.5)
                     break
                 else:
+                    for i in range(100):
+                        self.Set_Base_Speed(set_basespeed)
                     print("Waiting Running Speed Response...")
                     set_speed_complete = False
 
         while True:
             if not set_accel_complete:
-                self.Set_Running_Accel(set_accel)
                 if self.return_data[0] == self.Header and self.return_data[1] == self.Header and self.return_data[3] == 0:
                     print(" ".join(f"0x{byte:02X}" for byte in self.return_data))
                     set_accel_complete = True
                     print("Set Accel Complete")
                     time.sleep(0.5)
+                    self.return_data = copy.deepcopy(self.flush_return)
                     break
                 else:
+                    for i in range(100):
+                        self.Set_Running_Accel(set_accel)
                     print("Waiting Accel Mode Response...")
                     set_accel_complete = False
 
         while True:
             if not set_brake_complete:
-                self.Set_Running_Brake(set_brake)
                 if self.return_data[0] == self.Header and self.return_data[1] == self.Header and self.return_data[3] == 0:
                     print(" ".join(f"0x{byte:02X}" for byte in self.return_data))
                     set_brake_complete = True
                     print("Set Brake Complete")
                     time.sleep(0.5)
+                    self.return_data = copy.deepcopy(self.flush_return)
                     break
                 else:
+                    for i in range(100):
+                        self.Set_Running_Brake(set_brake)
                     print("Waiting Brake Mode Response...")
                     set_brake_complete = False
 
@@ -492,9 +525,10 @@ class Serial_COM:
                 setup_done = True
                 print("All Setup Complete")
                 time.sleep(0.5)
+                self.return_data = copy.deepcopy(self.flush_return)
                 break
 
             if setup_done:
                 break
 
-UART_COM = Serial_COM(baudRate, USBPort, timeout)
+UART_COM = Serial_COM(baudRate, ArduinoPort, timeout)

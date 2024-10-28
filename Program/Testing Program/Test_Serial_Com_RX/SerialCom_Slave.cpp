@@ -32,7 +32,7 @@ void Return_Ping(Param_t *param){
   
   uint8_t 
   len = 0x02,
-  return_buff[] = {HEADER, HEADER, len, param->error_type.No_err, param->instruction_type.Ping};
+  return_buff[len+3] = {HEADER, HEADER, len, param->error_type.No_err, param->instruction_type.Ping};
 
   Serial.write(return_buff, sizeof(return_buff));
 }
@@ -43,7 +43,7 @@ void Return_Running_Mode(Param_t *param){
   
   uint8_t 
   len = 0x03,
-  return_buff[] = {HEADER, HEADER, len, param->error_type.No_err, param->Select_mode, param->Base_speed};
+  return_buff[len+3] = {HEADER, HEADER, len, param->error_type.No_err, param->Select_mode, param->Base_speed};
 
   Serial.write(return_buff, sizeof(return_buff));
 }
@@ -54,7 +54,7 @@ void Return_Running_State(Param_t *param){
   
   uint8_t 
   len = 0x05,
-  return_buff[] = {HEADER, HEADER, len, param->error_type.No_err, param->Select_state, param->Set_Direction, param->Set_Acceleration, param->Set_Braking};
+  return_buff[len+3] = {HEADER, HEADER, len, param->error_type.No_err, param->Select_state, param->Set_Direction, param->Set_Acceleration, param->Set_Braking};
 
   Serial.write(return_buff, sizeof(return_buff));
 }
@@ -65,18 +65,18 @@ void Return_AGV_Status(Param_t *param){
   
   uint8_t 
   len = 0x0C,
-  return_buff[] = {
+  return_buff[len+3] = {
     HEADER, 
     HEADER, 
     len, 
     param->error_type.No_err, 
     param->Position,
-    (param->Pos_value >> 8) & 0xFF,
-    param->Pos_value & 0xFF,
-    (param->Send_counter >> 8) & 0xFF,
-    param->Send_counter & 0xFF,
-    (param->Pickup_counter >> 8) & 0xFF,
-    param->Pickup_counter & 0xFF,
+    uint8_t ((param->Pos_value >> 8) & 0xFF),
+    uint8_t (param->Pos_value & 0xFF),
+    uint8_t ((param->Send_counter >> 8) & 0xFF),
+    uint8_t (param->Send_counter & 0xFF),
+    uint8_t ((param->Pickup_counter >> 8) & 0xFF),
+    uint8_t (param->Pickup_counter & 0xFF),
     0x00,
     0x00,
     0x00,
@@ -96,7 +96,7 @@ void Return_Sensor_Data(Param_t *param){
   
   uint8_t 
   len = 0x03,
-  return_buff[] = {HEADER, HEADER, len, param->error_type.No_err, param->SensorA, param->SensorB};
+  return_buff[len+3] = {HEADER, HEADER, len, param->error_type.No_err, param->SensorA, param->SensorB};
 
   Serial.write(return_buff, sizeof(return_buff));
 }
@@ -106,15 +106,17 @@ void Return_NFC_Data(Param_t *param){
   param->Error_value = 0;
   
   uint8_t 
-  len = 0x04,
-  return_buff[] = {
+  len = 0x06,
+  return_buff[len+3] = {
     HEADER, 
     HEADER, 
     len, 
     param->error_type.No_err,
-    param->Tag_position, 
-    (param->Tag_value >> 8) & 0xFF,
+    param->Tag_sign, 
+    uint8_t((param->Tag_value >> 8) & 0xFF),
     param->Tag_value & 0xFF,
+    uint8_t((param->Tag_num >> 8) & 0xFF),
+    param->Tag_num & 0xFF,
   };
 
   Serial.write(return_buff, sizeof(return_buff));
@@ -126,7 +128,7 @@ void Return_Joystick_Data(Param_t *param){
 
   uint8_t
   len = 0x03,
-  return_buff[] = {HEADER, HEADER, len, param->error_type.No_err, param->Xpos, param->Ypos};
+  return_buff[len+3] = {HEADER, HEADER, len, param->error_type.No_err, param->Xpos, param->Ypos};
 
   Serial.write(return_buff, sizeof(return_buff));
 }
@@ -135,7 +137,7 @@ void Return_Joystick_Data(Param_t *param){
 void Return_Error_Packet(Param_t *param){
   uint8_t
   len = 0x01,
-  return_buff[] = {HEADER, HEADER, len, param->Error_value};
+  return_buff[len+3] = {HEADER, HEADER, len, param->Error_value};
 
   Serial.write(return_buff, sizeof(return_buff));
 }
@@ -146,6 +148,9 @@ void Receive_Instruction(Param_t *param){
   uint8_t
   data_len,
   len_validation;
+
+  Serial.flush();
+  for(int i=0; i<MAX_LEN; i++) rx_buff[i] = 0;
 
   // CHECK SERIAL AVAILABILITY
   if(Serial.available()){
@@ -214,8 +219,7 @@ void Receive_Instruction(Param_t *param){
               else param->Select_mode = LIDAR_MODE;
             }
             else if(rx_buff[5] == param->sub_item_type.Sub_item2){
-              if(rx_buff[6] == 0x01) param->Base_speed = NORMAL_SPEED;
-              else param->Base_speed = HIGH_SPEED;
+              param->Base_speed = rx_buff[6];
             }
 
             param->Error_value = 0;
@@ -227,11 +231,30 @@ void Receive_Instruction(Param_t *param){
             param->Item_get = param->item_type.Running_State;
 
             if(rx_buff[5] == param->sub_item_type.Sub_item1){
-              param->Select_state = rx_buff[6];
-              param->Set_Direction = rx_buff[7];
+              if(rx_buff[6] == 0x01) param->Select_state = START;
+              else if(rx_buff[6] == 0x02) param->Select_state = STOP;
+              else if(rx_buff[6] == 0x03) param->Select_state = PAUSE;
+
+              if(rx_buff[7] == 0x01) param->Set_Direction = FORWARD;
+              else if(rx_buff[7] == 0x02) param->Set_Direction = BACKWARD;
+              else if(rx_buff[7] == 0x03) param->Set_Direction = FORWARD_LEFT;
+              else if(rx_buff[7] == 0x04) param->Set_Direction = FORWARD_RIGHT;
+              else if(rx_buff[7] == 0x05) param->Set_Direction = BACKWARD_LEFT;
+              else if(rx_buff[7] == 0x06) param->Set_Direction = BACKWARD_RIGHT;
+              else if(rx_buff[7] == 0x07) param->Set_Direction = LEFT;
+              else if(rx_buff[7] == 0x08) param->Set_Direction = RIGHT;
+              else if(rx_buff[7] == 0x09) param->Set_Direction = ROTATE_LEFT;
+              else if(rx_buff[7] == 0x0A) param->Set_Direction = ROTATE_RIGHT;
+              else if(rx_buff[7] == 0x0B) param->Set_Direction = BRAKE;
             }
-            else if(rx_buff[5] == param->sub_item_type.Sub_item2) param->Set_Acceleration = rx_buff[6];
-            else if(rx_buff[5] == param->sub_item_type.Sub_item3) param->Set_Braking = rx_buff[6];
+            else if(rx_buff[5] == param->sub_item_type.Sub_item2){
+              if(rx_buff[6] == 0x01) param->Set_Acceleration = NORMAL_ACCEL;
+              else param->Set_Acceleration = REGENERATIVE_ACCEL;
+            }
+            else if(rx_buff[5] == param->sub_item_type.Sub_item3){
+              if(rx_buff[6] == 0x01) param->Set_Braking = NORMAL_BRAKE;
+              else param->Set_Braking = REGENERATIVE_BRAKE;
+            }
       
             param->Error_value = 0;
             Return_Error_Packet(param);
@@ -245,12 +268,6 @@ void Receive_Instruction(Param_t *param){
             param->Ypos = rx_buff[6];
 
             param->Error_value = 0;
-            Return_Error_Packet(param);
-          }
-
-          // DATA ITEM INCORRECT
-          else{
-            param->Error_value = param->error_type.Item_err;
             Return_Error_Packet(param);
           }
         }
