@@ -6,6 +6,9 @@
   Author  : Alfonsus Giovanni Mahendra Puta - Universitas Diponegoro
 */
 
+#define USE_NEW_PINOUT
+// #define USE_OLD_PINOUT
+
 /*User Private Include*/
 #include "PID_driver.h"
 #include "CustomSerial.h"
@@ -23,21 +26,37 @@
 #define DIR_R       10   // Right Motor Direction (Z/F) <- PCB PIN
 #define SIG_LR      30   // Left Right Motor Start Stop (SIGNAL) <-PCB PIN
 
-#define PROX_FRONT  A9
-#define PROX_REAR   A10
+#ifdef USE_NEW_PINOUT
+  #define PROX_FRONT  12
+  #define PROX_REAR   13
+#endif
+
+#ifdef USE_OLD_PINOUT
+  #define PROX_FRONT  A9
+  #define PROX_REAR   A10
+#endif
 
 #define IRQ_NFC1    14
 #define IRQ_NFC2    16
 #define VIR_VCC1    15
 #define VIR_VCC2    17
 
-// #define SERVO_LOCK  38
-// #define LS1         39
-// #define LS2         40
+#define SERVO_LOCK  38
+#define LS1         39
+#define LS2         40
 
-#define START_BTN       52
-#define SPEAKER_PIN     46
-#define PILOTLAMP_PIN   46
+
+#ifdef USE_OLD_PINOUT
+  #define START_BTN       41
+  #define SPEAKER_PIN     42
+  #define PILOTLAMP_PIN   43
+#endif
+
+#ifdef USE_NEW_PINOUT
+  #define START_BTN       52
+  #define SPEAKER_PIN     46
+  #define PILOTLAMP_PIN   46
+#endif
 
 #define SENS_NUM  16
 
@@ -60,7 +79,8 @@ nfc_read_interval = 100;
 uint8_t
 NFC_Timeout = 25,
 brake_val = 10,
-decrease_speed;
+decrease_speedL,
+decrease_speedR;
 
 uint8_t
 speed_cnt,
@@ -113,7 +133,8 @@ home = true,
 running = false,
 no_line = false,
 line_detected = false,
-proximity_state[2];
+front_proximity_state,
+rear_proximity_state;
 
 /*User Private Typedef*/
 
@@ -125,7 +146,8 @@ typedef enum{
 }Decision_t;
 
 typedef enum{
-  STATION_A = 0x01,
+  HOME_STATION = 0x01,
+  STATION_A,
   STATION_B
 }Station_t;
 
@@ -177,26 +199,30 @@ void Read_Sens(Sens_sel_t sensor_sel);
 void Calc_PID(Sens_sel_t sensor_sel);
 void Line_Check(void);
 bool Line_Search(Sens_sel_t sensor_sel);
-void Read_Proximity(Sens_sel_t sensor_sel);
 void Motor_Handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t speed);
 void Run_AGV(uint8_t agv_mode);
 void Destination_Handler(void);
 
+void NFC_Handler(NFC_Select_t select);
 void Turn_Check(NFC_Select_t select);
 void Cross_Check(NFC_Select_t select);
 void Station_Check(NFC_Select_t select);
 
 Decision_t Run_Path_Planning(uint8_t start_destination, uint8_t end_destination);
 
-bool Carrier_Subroutine(void);
+bool Read_Proximity(Sens_sel_t sensor_sel);
 
-void NFC_Handler(NFC_Select_t select);
+float Read_Voltage(void);
+float Read_Current(void);
+float Check_Battery_Cappacity(void);
+
 NFC_Status_t NFC_readData(Tag_Data_t *nfc);
 NFC_Status_t NFC_readTag(Tag_Data_t *nfc);
 
 void setup(){
   // Communication Setup
-  Serial.begin(500000);
+  Serial.begin(1000000);
+  Serial.setTimeout(100);
 
   // Sensor Pin Setup
   for(int i=0; i<SENS_NUM; i++){
@@ -235,9 +261,11 @@ void setup(){
   pinMode(VIR_VCC1, OUTPUT);
   pinMode(VIR_VCC2, OUTPUT);
 
-  // pinMode(SERVO_LOCK, OUTPUT);
-  // pinMode(LS1, INPUT_PULLUP);
-  // pinMode(LS2, INPUT_PULLUP);
+  #ifdef USE_NEW_PINOUT
+    pinMode(SERVO_LOCK, OUTPUT);
+    pinMode(LS1, INPUT_PULLUP);
+    pinMode(LS2, INPUT_PULLUP);
+  #endif
 
   pinMode(SENS_SWITCH, OUTPUT);
   digitalWrite(SENS_SWITCH, LOW);
@@ -278,41 +306,41 @@ void setup(){
   */
   
   /*
-  parameter.Current_Pos = HOME_SIGN;
-  parameter.CurrentPos_Value = 1920;
   parameter.Tag_sign = HOME_SIGN;
   parameter.Tag_value = 10;
   parameter.Tag_num = 11;
   parameter.SensorA_Status = DETECTED;
   parameter.SensorB_Status = DETECTED;
-  parameter.Send_counter = 100;
-  parameter.Pickup_counter = 101;
-  parameter.Battery_level = 90.5;
+  parameter.Send_counter = 1;
+  parameter.Pickup_counter = 2;
   */
+  parameter.Battery_level = 90.5;
+
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
 }
 
 void loop(){   
-  if(millis() - prev_tickComrx > 50){
-    Receive_Serial(&parameter);
-    prev_tickComtx = millis();
-  } 
-  
-  if(millis() - prev_tickComtx > 75){
-    Transmit_Serial(&parameter);
-    prev_tickComtx = millis();
-  }
+  /*
+  rear_proximity_state = Read_Proximity(REAR);
+  Serial.print("Sensor State: ");
+  Serial.println(front_proximity_state);
+  */
   
   /*
   if(parameter.Running_State == START && parameter.Running_Dir == FORWARD && parameter.Start_Pos == HOME && parameter.Destination == STATION_A){
     if(millis() - prev_dummytick > 150){
-      if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
-      else digitalWrite(PILOTLAMP_PIN, LOW);
+      if(digitalRead(LED_BUILTIN) == LOW) digitalWrite(LED_BUILTIN, HIGH);
+      else digitalWrite(LED_BUILTIN, LOW);
       prev_dummytick = millis();
     }
   }
   */
 
+//  /*
   if(!config_done){
+    Receive_Serial(&parameter);
+
     btn_pressed = !digitalRead(START_BTN);
     Read_Sens(FRONT);
 
@@ -330,10 +358,12 @@ void loop(){
         prev_dummytick = millis();
       }
     }
-    else if(line_detected && parameter.Running_State == START){
+    else if(line_detected && parameter.Running_Mode != NOT_SET && parameter.Running_State == START){
       digitalWrite(PILOTLAMP_PIN, LOW);
-      delay(1000);
       parameter.Running_State = START;
+      parameter.Running_Dir = FORWARD;
+      Serial.flush();
+      delay(1000);
       config_done = true;
     }
     else if(line_detected && btn_pressed){
@@ -341,7 +371,7 @@ void loop(){
       parameter.Running_State = START;
       parameter.Running_Dir = FORWARD;
       
-      parameter.Start_Pos = HOME;
+      parameter.Start_Pos = HOME_STATION;
       parameter.Destination = STATION_A;
 
       digitalWrite(PILOTLAMP_PIN, LOW);
@@ -352,9 +382,36 @@ void loop(){
   }
 
   else if(config_done){
-    digitalWrite(PILOTLAMP_PIN, HIGH);
-    Run_AGV(parameter.Running_Mode);
+    switch(parameter.Running_State){
+      case START:
+      Transmit_Serial(&parameter);
+      
+      digitalWrite(PILOTLAMP_PIN, HIGH);
+      Run_AGV(parameter.Running_Mode);
+      break;
+
+      case STOP:
+      if(millis() > prev_dummytick > 500){
+        if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
+        else digitalWrite(PILOTLAMP_PIN, LOW);
+        prev_dummytick = millis();
+      }
+      Motor_Handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
+      break;
+
+      case PAUSE:
+      if(millis() > prev_tickComrx > 100){
+        Receive_Serial(&parameter);
+        prev_tickComrx = millis();
+      }
+
+      if(parameter.Running_Dir == FORWARD) Calc_PID(FRONT);
+      else if(parameter.Running_Dir == BACKWARD) Calc_PID(REAR);
+      Motor_Handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
+      break;
+    }
   }
+//  */
 }
 
 /*User Private Function Initialize*/
@@ -408,7 +465,7 @@ void Read_Sens(Sens_sel_t sensor_sel){
 
   else if(turning_decision == TURN_RIGHT){
     sens_data == 0b0000000000000000;
-    for(int i=0; i<5; i++){
+    for(int i=0; i<6; i++){
       sens_value = !digitalRead(sens_pin[i]);
       bitWrite(sens_data, i, sens_value);
 
@@ -485,9 +542,9 @@ void Line_Check(void){
 }
 
 // Proximity Sensor Read Function
-void Read_Proximity(Sens_sel_t sensor_sel){
-  if(sensor_sel == FRONT) proximity_state[0] = !digitalRead(PROX_FRONT);
-  else proximity_state[1] = !digitalRead(PROX_REAR);
+bool Read_Proximity(Sens_sel_t sensor_sel){
+  if(sensor_sel == FRONT) return !digitalRead(PROX_FRONT);
+  else return !digitalRead(PROX_REAR);
 }
 
 // Motor Handler Function
@@ -509,11 +566,15 @@ void Motor_Handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t spee
 
     switch(accel){
       case NORMAL_ACCEL:
-      R_speed = speed + pid_val - decrease_speed;
-      L_speed = speed - pid_val - decrease_speed;
+      R_speed = speed + pid_val - decrease_speedR;
+      L_speed = speed - pid_val - decrease_speedL;
 
-      constrain(R_speed, 0, speed);
-      constrain(L_speed, 0, speed);
+      if(R_speed >= speed) R_speed = speed;
+      else if(R_speed <= 0) R_speed = 0;
+
+      if(L_speed >= speed) L_speed = speed;
+      else if(L_speed <= 0) L_speed = 0;
+
       analogWrite(PWM_R, R_speed);
       analogWrite(PWM_L, L_speed);
       break;
@@ -528,10 +589,14 @@ void Motor_Handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t spee
       else if(speed_cnt == speed) running = true;
 
       if(running){
-        R_speed = speed + pid_val - right_tolerance - decrease_speed;
-        L_speed = speed - pid_val - left_tolerance - decrease_speed;
-        constrain(R_speed, 0, speed - right_tolerance);
-        constrain(L_speed, 0, speed - left_tolerance);
+        R_speed = speed + pid_val - decrease_speedR;
+        L_speed = speed - pid_val - decrease_speedL;
+
+        if(R_speed >= speed) R_speed = speed;
+        else if(R_speed <= 0) R_speed = 0;
+
+        if(L_speed >= speed) L_speed = speed;
+        else if(L_speed <= 0) L_speed = 0;
 
         analogWrite(PWM_R, R_speed);
         analogWrite(PWM_L, L_speed);
@@ -549,8 +614,8 @@ void Motor_Handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t spee
 
     switch(accel){
       case NORMAL_ACCEL:
-      R_speed = speed + pid_val - decrease_speed;
-      L_speed = speed - pid_val - decrease_speed;
+      R_speed = speed + pid_val - decrease_speedR;
+      L_speed = speed - pid_val - decrease_speedL;
 
       constrain(R_speed, 0, speed);
       constrain(L_speed, 0, speed);
@@ -568,8 +633,8 @@ void Motor_Handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t spee
       else if(speed_cnt == speed) running = true;
 
       if(running){
-        R_speed = speed + pid_val - right_tolerance - decrease_speed;
-        L_speed = speed - pid_val - left_tolerance - decrease_speed;
+        R_speed = speed + pid_val - right_tolerance - decrease_speedR;
+        L_speed = speed - pid_val - left_tolerance - decrease_speedL;
         constrain(R_speed, 0, speed - right_tolerance);
         constrain(L_speed, 0, speed - left_tolerance);
 
@@ -641,41 +706,27 @@ void Motor_Handler(uint8_t direction, uint8_t accel, uint8_t brake, uint8_t spee
 void Run_AGV(uint8_t agv_mode){
   switch(agv_mode){
     case LF_MODE:
-    switch(parameter.Running_State){
-      case START:
-      if(parameter.Running_Dir == FORWARD || parameter.Running_Dir == BACKWARD){
-        if(parameter.Running_Dir == FORWARD){
-          Calc_PID(FRONT);
-          if(millis() - prev_tickC > nfc_read_interval){
-            NFC_Handler(FRONT_NFC);
-            prev_tickC = millis();
-          }
+    if(parameter.Running_Dir == FORWARD || parameter.Running_Dir == BACKWARD){
+      if(parameter.Running_Dir == FORWARD){
+        Calc_PID(FRONT);
+        if(millis() - prev_tickC > nfc_read_interval){
+          NFC_Handler(FRONT_NFC);
+          prev_tickC = millis();
         }
-        else{
-          Calc_PID(REAR);
-          if(millis() - prev_tickC > nfc_read_interval){
-            NFC_Handler(REAR_NFC);
-            prev_tickC = millis();
-          }
-        }
-        Line_Check();
-        Motor_Handler(parameter.Running_Dir, parameter.Running_Accel, parameter.Running_Brake, parameter.Base_Speed);
       }
-
       else{
-        Motor_Handler(parameter.Running_Dir, parameter.Running_Accel, parameter.Running_Brake, parameter.Base_Speed);
+        Calc_PID(REAR);
+        if(millis() - prev_tickC > nfc_read_interval){
+          NFC_Handler(REAR_NFC);
+          prev_tickC = millis();
+        }
       }
-      break;
+      Line_Check();
+      Motor_Handler(parameter.Running_Dir, parameter.Running_Accel, parameter.Running_Brake, parameter.Base_Speed);
+    }
 
-      case STOP:
-      Motor_Handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
-      break;
-
-      case PAUSE:
-      if(parameter.Running_Dir == FORWARD) Calc_PID(FRONT);
-      else if(parameter.Running_Dir == BACKWARD) Calc_PID(REAR);
-      Motor_Handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
-      break;
+    else{
+      Motor_Handler(parameter.Running_Dir, parameter.Running_Accel, parameter.Running_Brake, parameter.Base_Speed);
     }
     break;
 
@@ -686,15 +737,18 @@ void Run_AGV(uint8_t agv_mode){
 
 // Destination To Current Position Check FUnction
 void Destination_Handler(void){
-  if(parameter.Destination == parameter.Current_Pos){
+  if(parameter.Destination == parameter.Tag_sign){
     if(parameter.Tag_sign == HOME_SIGN){
-      // HANDLER JIKA SUDAH SAMPAI TITIK HOME
       parameter.Current_Pos = HOME;
+      Motor_Handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
+      delay(1000);
+      Line_Search(FRONT);
+      parameter.Running_State = PAUSE;
     }
 
     else if(parameter.Tag_sign == CARRIER_SIGN){ 
       parameter.Current_Pos = STATION_A;
-      delay(500);
+      delay(1000);
       Motor_Handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
       delay(1000);
       Line_Search(FRONT);
@@ -703,6 +757,8 @@ void Destination_Handler(void){
 
     else if(parameter.Tag_sign == STATION_SIGN){
       parameter.Current_Pos = STATION_B;
+      Motor_Handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
+      digitalWrite(SIG_LR, HIGH);
       parameter.Running_State = PAUSE;
     }
   }
@@ -713,17 +769,19 @@ void Turn_Check(NFC_Select_t select){
   if(select == FRONT_NFC){
     // DETEKSI AWAL BELOKAN
     if(parameter.Tag_sign != TURN_SIGN && NFC_F.tagType == TURN_SIGN){
-      decrease_speed = NFC_F.tagTypeValue ;
+      decrease_speedL = NFC_F.tagTypeValue;
+      decrease_speedR = NFC_F.tagTypeValue;
     }
     
     // DETEKSI AKHIR BELOKAN
     else if(parameter.Tag_sign == TURN_SIGN && NFC_F.tagType == TURN_SIGN){
-      if(millis() - prev_tickE > 10 && decrease_speed != 0){
+      if(millis() - prev_tickE > 10 && decrease_speedR != 0 && decrease_speedL != 0){
         turn_timer_cnt++;
 
         if(turn_timer_cnt == 2){
           turn_timer_cnt = 0;
-          decrease_speed = 0;
+          decrease_speedL = 0;
+          decrease_speedR = 0;
         }
 
         prev_tickE = millis();
@@ -733,7 +791,7 @@ void Turn_Check(NFC_Select_t select){
     // BELOKAN TIDAK TERDETEKSI
     else if(NFC_F.tagType != TURN_SIGN) turn_timer_cnt = 0;
 
-    if(millis() - prev_tickD > 1000 && NFC_F.tagType == NONE_SIGN && decrease_speed == 0){
+    if(millis() - prev_tickD > 1000 && NFC_F.tagType == NONE_SIGN && decrease_speedR == 0 && decrease_speedL == 0){
       parameter.Tag_sign = NONE_SIGN;
       prev_tickD = millis();
     }
@@ -747,26 +805,32 @@ void Cross_Check(NFC_Select_t select){
     if(parameter.Tag_sign != CROSSECTION_SIGN && NFC_F.tagType == CROSSECTION_SIGN){
       turning_decision = Run_Path_Planning(parameter.Start_Pos, parameter.Destination);
       
-      if(turning_decision == TURN_LEFT || turning_decision == TURN_RIGHT){
-        decrease_speed = 50;
-        if(millis() - prev_turningTick > 5000){
-          turning_decision = NONE_TURN;
-          prev_turningTick = millis();
-        }
+      if(turning_decision == TURN_LEFT){
+        decrease_speedL = 30;
+        decrease_speedR = 10;
+      }
+      
+      else if(turning_decision == TURN_RIGHT){
+        decrease_speedL = 10;
+        decrease_speedR = 30;
       }
 
-      else decrease_speed = 40;
+      else{
+        decrease_speedR = 40;
+        decrease_speedL = 40;
+      }
     }
     
     // DETEKSI AKHIR BELOKAN
     else if(parameter.Tag_sign == CROSSECTION_SIGN && NFC_F.tagType == CROSSECTION_SIGN){
-      if(millis() - prev_tickF > 10 && decrease_speed != 0){
+      if(millis() - prev_tickF > 10 && decrease_speedL != 0 && decrease_speedR != 0){
         cross_timer_cnt++;
 
         if(cross_timer_cnt == 2){
           turning_decision = NONE_TURN;
           cross_timer_cnt = 0;
-          decrease_speed = 0;
+          decrease_speedR = 0;
+          decrease_speedL = 0;
         }
 
         prev_tickF = millis();
@@ -774,9 +838,18 @@ void Cross_Check(NFC_Select_t select){
     }
 
     // BELOKAN TIDAK TERDETEKSI
-    else if(NFC_F.tagType != CROSSECTION_SIGN) cross_timer_cnt = 0;
+    else if(NFC_F.tagType != CROSSECTION_SIGN){
+      cross_timer_cnt = 0;
+    }
 
-    if(millis() - prev_tickD > 1000 && NFC_F.tagType == NONE_SIGN && decrease_speed == 0){
+    if(turning_decision == TURN_LEFT || turning_decision == TURN_RIGHT){
+      if(millis() - prev_turningTick > 3000){
+        turning_decision = NONE_TURN;
+        prev_turningTick = millis();
+      }
+    }
+
+    if(millis() - prev_tickD > 1000 && NFC_F.tagType == NONE_SIGN && decrease_speedR == 0 && decrease_speedL == 0){
       parameter.Tag_sign = NONE_SIGN;
       prev_tickD = millis();
     }
@@ -785,11 +858,11 @@ void Cross_Check(NFC_Select_t select){
 
 // PATH PLANNING FUNCTION
 Decision_t Run_Path_Planning(uint8_t start, uint8_t end){
-  if(start == HOME && end == STATION_A) return STRAIGHT;
-  else if(start == HOME && end == STATION_B) return TURN_LEFT;
-  else if(start == STATION_A && end == HOME) return STRAIGHT;
+  if(start == HOME_STATION && end == STATION_A) return STRAIGHT;
+  else if(start == HOME_STATION && end == STATION_B) return TURN_LEFT;
+  else if(start == STATION_A && end == HOME_STATION) return STRAIGHT;
   else if(start == STATION_A && end == STATION_B) return TURN_RIGHT;
-  else if(start == STATION_B && end == HOME) return TURN_RIGHT;
+  else if(start == STATION_B && end == HOME_STATION) return TURN_RIGHT;
   else if(start == STATION_B && end == STATION_A) return TURN_LEFT;
 }
 
@@ -808,6 +881,8 @@ void NFC_Handler(NFC_Select_t select){
       parameter.Tag_sign = NFC_F.tagType;
       parameter.Tag_value = NFC_F.tagTypeValue;
       parameter.Tag_num = NFC_F.tagNum;
+
+      parameter.Current_Pos = parameter.Tag_sign;
     }
   }
 
@@ -824,6 +899,8 @@ void NFC_Handler(NFC_Select_t select){
       parameter.Tag_sign = NFC_R.tagType;
       parameter.Tag_value = NFC_R.tagTypeValue;
       parameter.Tag_num = NFC_R.tagNum;
+
+      parameter.Current_Pos = parameter.Tag_sign;
     }
   }
 }

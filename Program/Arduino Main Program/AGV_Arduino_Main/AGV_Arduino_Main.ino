@@ -8,7 +8,7 @@
 
 /*User Private Include*/
 #include "PID_driver.h"
-#include "SerialCom_Slave.h"
+#include "CustomSerial.h"
 #include "Wire.h"
 #include "Adafruit_PN532.h"
 
@@ -197,15 +197,15 @@ void setup(){
   digitalWrite(SENS_SWITCH, LOW);
 
   // Communication Setup
-  parameter.Select_mode = NOT_SET,
-  parameter.Base_speed = 80;
-  parameter.Select_state = STOP;
-  parameter.Set_Acceleration = REGENERATIVE_ACCEL;
-  parameter.Set_Braking = REGENERATIVE_BRAKE;
-  parameter.Position = HOME;
-  parameter.SensorA = NOT_DETECTED;
-  parameter.SensorB = NOT_DETECTED;
-  parameter.Tag_sign = HOME_SIGN;
+  parameter.Running_Mode = NOT_SET,
+  parameter.Base_Speed = 80;
+  parameter.Running_State = STOP;
+  parameter.Running_Accel = REGENERATIVE_ACCEL;
+  parameter.Running_Brake = REGENERATIVE_BRAKE;
+  parameter.Current_Pos = HOME;
+  parameter.SensorA_Status = NOT_DETECTED;
+  parameter.SensorB_Status = NOT_DETECTED;
+  parameter.Tag_sign = NONE_SIGN;
 
   // Pid Setup
   pid_agv_f.Kp        = 0.825;     

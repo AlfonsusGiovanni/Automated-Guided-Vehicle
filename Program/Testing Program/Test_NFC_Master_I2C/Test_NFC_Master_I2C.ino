@@ -118,7 +118,7 @@ void loop(){
     nfc.SAMConfig();
     digitalWrite(VIR_VCC1, HIGH);
     digitalWrite(VIR_VCC2, LOW);
-    NFC_writeTag(&NFC_Tag, STATION_SIGN, 1, 3);
+    NFC_writeTag(&NFC_Tag, STATION_SIGN, 2, 3);
   }
 
   for(int i=0; i<100; i++){

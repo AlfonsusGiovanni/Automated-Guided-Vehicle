@@ -99,48 +99,9 @@ typedef struct{
   Ypos;
 
   float Battery_level;
-
-  bool data_received;
-
-  String Type[22] = {
-    // RECIEVE STRING TPYE
-    "Running Mode",
-    "Base Speed",
-    "Running State",
-    "Running Dir",
-    "Running Accel",
-    "Running Brake",
-    "Start Pos",
-    "Destination",
-    "Joystick X",
-    "Joystick Y",
-    
-    // TRANSMIT STRING TYPE
-    "Running Mode",
-    "Running State",
-    "Current Pos",
-    "CurrentPos Val",
-    "Tag Sign",
-    "Tag Value",
-    "Tag Num",
-    "SensA State",
-    "SensB State",
-    "Send Counter",
-    "Pickup Counter",
-    "Battery Level"
-  };
-
-  String dataString_Receive;
-  String dataString_Send;
-  String Type_Receive[10];
-  String Data_Receive[10];
-  String Type_Send[12];
-  String Data_Send[12];
 }Param_t;
 
-void Receive_Serial(Param_t *param);
-void Transmit_Serial(Param_t *param);
-void Receive_String(Param_t *param);
-void Transmit_String(Param_t *param);
+uint8_t Receive_Serial(Param_t *param);
+uint8_t Transmit_Serial(Param_t *param);
 
 #endif

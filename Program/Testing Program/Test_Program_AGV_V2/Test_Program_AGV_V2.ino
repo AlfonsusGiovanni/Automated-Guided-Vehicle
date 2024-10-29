@@ -387,11 +387,6 @@ void setup(){
 //************************************************************************************************************************************************************************************
 void loop(){
   digitalWrite(SPEAKER_PIN, HIGH);
-
-  if(NFC_Tag.tagType == STATION_SIGN){
-    motor_handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, 50);
-  }
-  else run_agv(LF_MODE);
   /*
   Serial.print(NFC_Tag.tagType);
   Serial.print(" ");
