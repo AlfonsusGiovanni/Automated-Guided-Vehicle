@@ -59,7 +59,6 @@
 #endif
 
 #define SENS_NUM  16
-
 #define DATA_AUTH_HEADER    0xFF
 
 /*User Private Typedef*/
@@ -219,7 +218,8 @@ float Check_Battery_Cappacity(void);
 NFC_Status_t NFC_readData(Tag_Data_t *nfc);
 NFC_Status_t NFC_readTag(Tag_Data_t *nfc);
 
-void setup(){
+/*User Main Program*/
+int main(){
   // Communication Setup
   Serial.begin(1000000);
   Serial.setTimeout(100);
@@ -304,114 +304,101 @@ void setup(){
   parameter.Start_Pos = HOME;
   parameter.Destination = STATION_B;
   */
-  
-  /*
-  parameter.Tag_sign = HOME_SIGN;
-  parameter.Tag_value = 10;
-  parameter.Tag_num = 11;
-  parameter.SensorA_Status = DETECTED;
-  parameter.SensorB_Status = DETECTED;
-  parameter.Send_counter = 1;
-  parameter.Pickup_counter = 2;
-  */
+
   parameter.Battery_level = 90.5;
 
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
-}
-
-void loop(){   
-  /*
-  rear_proximity_state = Read_Proximity(REAR);
-  Serial.print("Sensor State: ");
-  Serial.println(front_proximity_state);
-  */
-  
-  /*
-  if(parameter.Running_State == START && parameter.Running_Dir == FORWARD && parameter.Start_Pos == HOME && parameter.Destination == STATION_A){
-    if(millis() - prev_dummytick > 150){
-      if(digitalRead(LED_BUILTIN) == LOW) digitalWrite(LED_BUILTIN, HIGH);
-      else digitalWrite(LED_BUILTIN, LOW);
-      prev_dummytick = millis();
-    }
-  }
-  */
-
-//  /*
-  if(!config_done){
-    Receive_Serial(&parameter);
-
-    btn_pressed = !digitalRead(START_BTN);
-    Read_Sens(FRONT);
-
-    if(!line_detected){
+  while(1){
+    /*
+    rear_proximity_state = Read_Proximity(REAR);
+    Serial.print("Sensor State: ");
+    Serial.println(front_proximity_state);
+    */
+    
+    /*
+    if(parameter.Running_State == START && parameter.Running_Dir == FORWARD && parameter.Start_Pos == HOME && parameter.Destination == STATION_A){
       if(millis() - prev_dummytick > 150){
-        if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
-        else digitalWrite(PILOTLAMP_PIN, LOW);
+        if(digitalRead(LED_BUILTIN) == LOW) digitalWrite(LED_BUILTIN, HIGH);
+        else digitalWrite(LED_BUILTIN, LOW);
         prev_dummytick = millis();
       }
     }
-    else if(line_detected && parameter.Running_State != START && !btn_pressed){
-      if(millis() - prev_dummytick > 500){
-        if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
-        else digitalWrite(PILOTLAMP_PIN, LOW);
-        prev_dummytick = millis();
-      }
-    }
-    else if(line_detected && parameter.Running_Mode != NOT_SET && parameter.Running_State == START){
-      digitalWrite(PILOTLAMP_PIN, LOW);
-      parameter.Running_State = START;
-      parameter.Running_Dir = FORWARD;
-      Serial.flush();
-      delay(1000);
-      config_done = true;
-    }
-    else if(line_detected && btn_pressed){
-      parameter.Running_Mode = LF_MODE;
-      parameter.Running_State = START;
-      parameter.Running_Dir = FORWARD;
-      
-      parameter.Start_Pos = HOME_STATION;
-      parameter.Destination = STATION_A;
+    */
 
-      digitalWrite(PILOTLAMP_PIN, LOW);
-      delay(1000);
-      parameter.Running_State = START;
-      config_done = true;
+    
+    if(!config_done){
+      Receive_Serial(&parameter);
+
+      btn_pressed = !digitalRead(START_BTN);
+      Read_Sens(FRONT);
+
+      if(!line_detected){
+        if(millis() - prev_dummytick > 150){
+          if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
+          else digitalWrite(PILOTLAMP_PIN, LOW);
+          prev_dummytick = millis();
+        }
+      }
+      else if(line_detected && parameter.Running_State != START && !btn_pressed){
+        if(millis() - prev_dummytick > 500){
+          if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
+          else digitalWrite(PILOTLAMP_PIN, LOW);
+          prev_dummytick = millis();
+        }
+      }
+      else if(line_detected && parameter.Running_Mode != NOT_SET && parameter.Running_State == START){
+        digitalWrite(PILOTLAMP_PIN, LOW);
+        parameter.Running_State = START;
+        parameter.Running_Dir = FORWARD;
+        Serial.flush();
+        delay(1000);
+        config_done = true;
+      }
+      else if(line_detected && btn_pressed){
+        parameter.Running_Mode = LF_MODE;
+        parameter.Running_State = START;
+        parameter.Running_Dir = FORWARD;
+        
+        parameter.Start_Pos = HOME_STATION;
+        parameter.Destination = STATION_A;
+
+        digitalWrite(PILOTLAMP_PIN, LOW);
+        delay(1000);
+        parameter.Running_State = START;
+        config_done = true;
+      }
+    }
+
+    else if(config_done){
+      switch(parameter.Running_State){
+        case START:
+        Transmit_Serial(&parameter);
+        
+        digitalWrite(PILOTLAMP_PIN, HIGH);
+        Run_AGV(parameter.Running_Mode);
+        break;
+
+        case STOP:
+        if(millis() > prev_dummytick > 500){
+          if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
+          else digitalWrite(PILOTLAMP_PIN, LOW);
+          prev_dummytick = millis();
+        }
+        Motor_Handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
+        break;
+
+        case PAUSE:
+        if(millis() > prev_tickComrx > 100){
+          Receive_Serial(&parameter);
+          prev_tickComrx = millis();
+        }
+
+        if(parameter.Running_Dir == FORWARD) Calc_PID(FRONT);
+        else if(parameter.Running_Dir == BACKWARD) Calc_PID(REAR);
+        Motor_Handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
+        break;
+      }
     }
   }
-
-  else if(config_done){
-    switch(parameter.Running_State){
-      case START:
-      Transmit_Serial(&parameter);
-      
-      digitalWrite(PILOTLAMP_PIN, HIGH);
-      Run_AGV(parameter.Running_Mode);
-      break;
-
-      case STOP:
-      if(millis() > prev_dummytick > 500){
-        if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
-        else digitalWrite(PILOTLAMP_PIN, LOW);
-        prev_dummytick = millis();
-      }
-      Motor_Handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
-      break;
-
-      case PAUSE:
-      if(millis() > prev_tickComrx > 100){
-        Receive_Serial(&parameter);
-        prev_tickComrx = millis();
-      }
-
-      if(parameter.Running_Dir == FORWARD) Calc_PID(FRONT);
-      else if(parameter.Running_Dir == BACKWARD) Calc_PID(REAR);
-      Motor_Handler(BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
-      break;
-    }
-  }
-//  */
 }
 
 /*User Private Function Initialize*/

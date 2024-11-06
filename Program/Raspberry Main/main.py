@@ -61,7 +61,7 @@ class AGV:
             # Serial.UART_COM.Send_String()
             Serial.UART_COM.Transmit_Data()
             Serial.UART_COM.data.flushOutput()
-            time.sleep(1)
+            time.sleep(0.1)
 
     def Receiver_Handler(self):
         while self.SerialReceive_Thread_On:
@@ -91,8 +91,9 @@ for i in range(0, 100):
     Serial.UART_COM.Destination = Serial.UART_COM.station_type.STATION_A
     Serial.UART_COM.Running_State = Serial.UART_COM.running_state.START
     Serial.UART_COM.Transmit_Data()
-    time.sleep(0.01)
 print("Init Done")
+
+time.sleep(1)
 
 # Start All Thread
 AGV1.SerialTransmit_Thread_On = True
@@ -107,9 +108,12 @@ while True:
     Serial.UART_COM.Running_Dir = Serial.UART_COM.running_dir.FORWARD
     # print([hex(i) for i in Serial.UART_COM.return_data])
 
-    # print("AGV Running Mode: ", Serial.UART_COM.Running_Mode, "AGV Running State: ", Serial.UART_COM.Running_State)
-    # print("AGV Position: ", Serial.UART_COM.Current_Pos, "AGV Pos Value: ", Serial.UART_COM.CurrentPos_value)
-    # print("AGV Send Counter: ", Serial.UART_COM.Send_Counter, "AGV Pickup Counter: ", Serial.UART_COM.Pickup_Counter)
+    print("AGV Running Mode: ", Serial.UART_COM.Running_Mode)
+    print("AGV Running State: ", Serial.UART_COM.Running_State)
+    print("AGV Position: ", Serial.UART_COM.Current_Pos)
+    print("AGV Pos Value: ", Serial.UART_COM.CurrentPos_value)
+    print("AGV Send Counter: ", Serial.UART_COM.Send_Counter)
+    print("AGV Pickup Counter: ", Serial.UART_COM.Pickup_Counter)
     print("AGV Battery Level: ", Serial.UART_COM.Battery_Level)
 
     # print("Running State: ", Serial.UART_COM.Select_state)

@@ -14,7 +14,7 @@ import time
 baudRate = 1000000
 UARTPort = '/dev/serial1'
 USBPort = '/dev/ttyUSB0'
-ArduinoPort = 'COM17'
+ArduinoPort = 'COM13'
 timeout = 0
 # ----------------------
 
@@ -119,8 +119,11 @@ class Serial_COM:
           self.Running_Dir = 0
           self.Running_Accel = 0
           self.Running_Brake = 0
-          self.Start_Pos = 0
-          self.Destination = 0
+          self.Start_coordinateX = 0
+          self.Start_coordinateY = 0
+          self.Goal_coordinateX = 0
+          self.Goal_coordinateY = 0
+          self.To_Tagnum = 0
           self.joystick_X = 0
           self.joystick_Y = 0
 
@@ -132,6 +135,8 @@ class Serial_COM:
           self.Tag_sign = 0
           self.Tag_value = 0
           self.Tag_num = 0
+          self.Current_coordinateX = 0
+          self.CUrrent_coordinateY = 0
           self.Send_Counter = 0
           self.Pickup_Counter = 0
           self.Battery_Level = 0
@@ -183,14 +188,19 @@ class Serial_COM:
         tx_buff = arr.array('B', [
             self.Header,
             self.Header,
+            
             self.Running_Mode,
             self.Base_Speed, 
             self.Running_State,
             self.Running_Dir,
             self.Running_Accel,
             self.Running_Brake,
-            self.Start_Pos,
-            self.Destination,
+
+            self.Start_coordinateX,
+            self.Start_coordinateY,
+            self.Goal_coordinateX,
+            self.Goal_coordinateY,
+
             self.joystick_X,
             self.joystick_Y,
             self.Tail
@@ -198,9 +208,9 @@ class Serial_COM:
         self.data.write(tx_buff)
 
     def Receive_Data(self):
-        rx_buff = self.data.read(23)
+        rx_buff = self.data.read(25)
 
-        if len(rx_buff) == 23 and rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[22] == self.Tail:
+        if len(rx_buff) == 25 and rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[24] == self.Tail:
             self.Running_Mode = rx_buff[2]
             self.Running_State = rx_buff[3]
             self.Current_Pos = rx_buff[4]
@@ -208,12 +218,14 @@ class Serial_COM:
             self.Tag_sign = rx_buff[7]
             self.Tag_value = rx_buff[8] << 8 | rx_buff[9]
             self.Tag_num = rx_buff[10] << 8 | rx_buff[11]
-            self.SensorA_Status = rx_buff[12]
-            self.SensorB_Status = rx_buff[13]
-            self.Send_Counter = rx_buff[14] << 8 | rx_buff[15]
-            self.Pickup_Counter = rx_buff[16] << 8 | rx_buff[17]
+            self.Current_coordinateX = rx_buff[12]
+            self.Current_coordinateY = rx_buff[13]
+            self.SensorA_Status = rx_buff[14]
+            self.SensorB_Status = rx_buff[15]
+            self.Send_Counter = rx_buff[16] << 8 | rx_buff[17]
+            self.Pickup_Counter = rx_buff[18] << 8 | rx_buff[19]
 
-            voltage_array = arr.array('B', [rx_buff[18], rx_buff[19], rx_buff[20], rx_buff[21]])
+            voltage_array = arr.array('B', [rx_buff[20], rx_buff[21], rx_buff[22], rx_buff[23]])
             voltage_data = bytes(voltage_array)
             self.Battery_Level = struct.unpack('f', voltage_data)[0]
 

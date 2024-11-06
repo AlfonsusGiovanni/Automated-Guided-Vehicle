@@ -61,8 +61,8 @@
 
 // TESTING SELECT ----
 //#define LINESENS_TEST
-#define MOTOR_TEST
-//#define PID_TEST
+//#define MOTOR_TEST
+#define PID_TEST
 //#define SERIAL_TEST
 // -------------------
 
@@ -292,8 +292,8 @@ void setup(){
   // ---------------------------------
 
   // SETUP NFC ---
-  nfc.begin();
-  nfc.SAMConfig();
+  //nfc.begin();
+  //nfc.SAMConfig();
   // -------------
 
   // EARLY CHECK SETUP --------------------
