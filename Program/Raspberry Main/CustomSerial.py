@@ -14,7 +14,7 @@ import time
 baudRate = 1000000
 UARTPort = '/dev/serial1'
 USBPort = '/dev/ttyUSB0'
-ArduinoPort = 'COM13'
+ArduinoPort = 'COM9'
 timeout = 0
 # ----------------------
 
@@ -126,10 +126,14 @@ class Serial_COM:
           self.To_Tagnum = 0
           self.joystick_X = 0
           self.joystick_Y = 0
+          self.Left_speed = 0
+          self.Right_speed = 0
 
           # Data Get
           self.Current_Pos = 0
           self.CurrentPos_value = 0
+          self.Left_Counter = 0
+          self.Right_Counter = 0
           self.SensorA_Status = 0
           self.SensorB_Status = 0
           self.Tag_sign = 0
@@ -148,33 +152,6 @@ class Serial_COM:
           self.brake_mode = BrakeData()
           self.station_type = StationData()
           self.sign_data = NFCSignData()
-
-          # String Data Type
-          self.Type = [
-              "Running Mode",
-              "Base Speed",
-              "Running State",
-              "Running Dir",
-              "Running Accel",
-              "Running Brake",
-              "Start Pos",
-              "Destination",
-              "Joystick X",
-              "Joystick Y",
-              "Current Pos",
-              "CurrentPos Val",
-              "Tag Sign",
-              "Tag Value",
-              "Tag Num",
-              "SensA State",
-              "SensB State",
-              "Send Counter",
-              "Pickup Counter",
-              "Battery Level"
-          ]
-
-          self.DataString = ""
-          self.ReceivedString = ""
 
           # Serial Initialize
           self.data = serial.Serial(serialPort, inputBaudRate, timeout=inputTimeout)
@@ -203,14 +180,18 @@ class Serial_COM:
 
             self.joystick_X,
             self.joystick_Y,
+
+            self.Left_speed,
+            self.Right_speed,
+
             self.Tail
             ])
         self.data.write(tx_buff)
 
     def Receive_Data(self):
-        rx_buff = self.data.read(25)
+        rx_buff = self.data.read(29)
 
-        if len(rx_buff) == 25 and rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[24] == self.Tail:
+        if len(rx_buff) == 29 and rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[28] == self.Tail:
             self.Running_Mode = rx_buff[2]
             self.Running_State = rx_buff[3]
             self.Current_Pos = rx_buff[4]
@@ -220,69 +201,15 @@ class Serial_COM:
             self.Tag_num = rx_buff[10] << 8 | rx_buff[11]
             self.Current_coordinateX = rx_buff[12]
             self.Current_coordinateY = rx_buff[13]
-            self.SensorA_Status = rx_buff[14]
-            self.SensorB_Status = rx_buff[15]
-            self.Send_Counter = rx_buff[16] << 8 | rx_buff[17]
-            self.Pickup_Counter = rx_buff[18] << 8 | rx_buff[19]
+            self.Left_Counter = rx_buff[14] << 8 | rx_buff[15]
+            self.Right_Counter = rx_buff[16] << 8 | rx_buff[17]
+            self.SensorA_Status = rx_buff[18]
+            self.SensorB_Status = rx_buff[19]
+            self.Send_Counter = rx_buff[20] << 8 | rx_buff[21]
+            self.Pickup_Counter = rx_buff[22] << 8 | rx_buff[23]
 
-            voltage_array = arr.array('B', [rx_buff[20], rx_buff[21], rx_buff[22], rx_buff[23]])
+            voltage_array = arr.array('B', [rx_buff[24], rx_buff[25], rx_buff[26], rx_buff[27]])
             voltage_data = bytes(voltage_array)
             self.Battery_Level = struct.unpack('f', voltage_data)[0]
-
-    def Send_String(self):
-        string_dataType = [
-            f"{self.Running_Mode:02x}",
-            f"{self.Base_Speed:02x}",
-            f"{self.Running_State:02x}",
-            f"{self.Running_Dir:02x}",
-            f"{self.Running_Accel:02x}",
-            f"{self.Running_Brake:02x}",
-            f"{self.Start_Pos:02x}",
-            f"{self.Destination:02x}",
-            f"{self.joystick_X:02x}",
-            f"{self.joystick_Y:02x}",
-        ]
-        
-        self.DataString = ""
-        for i in range(0, 10):
-            if i == 0:
-                self.DataString += "-" + self.Type[i] + "/" + string_dataType[i] + "-"
-            elif i < 9:
-                self.DataString += self.Type[i] + "/" + string_dataType[i] + "-"
-            else:
-                self.DataString += self.Type[i] + "/" + string_dataType[i] + "\n"
-
-        self.data.write(self.DataString.encode('utf-8'))
-        self.data.flushOutput()
-
-    def Receive_String(self):
-        if self.data.in_waiting > 0:
-            self.ReceivedString = self.data.readline().decode('utf-8').strip()
-            dataParts = self.ReceivedString.split("-")
-
-            dataParts = [part for part in dataParts if part] 
-
-            labels = []
-            values = []
-
-            for part in dataParts:
-                label, value = part.split("/")
-                labels.append(label)
-                values.append(value)
-
-            self.Running_Mode = int(values[0])    
-            self.Running_State = int(values[1])
-            self.Current_Pos = int(values[2])
-            self.CurrentPos_value = int(values[3])
-            self.Tag_sign = int(values[4])
-            self.Tag_value = int(values[5])
-            self.Tag_num = int(values[6])
-            self.SensorA_Status = int(values[7])
-            self.SensorB_Status = int(values[8])
-            self.Send_Counter = int(values[9])
-            self.Pickup_Counter = int(values[10])
-            self.Battery_Level = float(values[11])
-
-            self.data.flushInput()
 
 UART_COM = Serial_COM(baudRate, ArduinoPort, timeout)

@@ -69,7 +69,7 @@ class AGV:
                 # Serial.UART_COM.Receive_String()
                 Serial.UART_COM.Receive_Data()
                 Serial.UART_COM.data.flushInput()
-                time.sleep(1)
+                time.sleep(0.1)
 
     def Set_Destination(self, now_position, destination):
         if Serial.UART_COM.Current_Pos != destination:

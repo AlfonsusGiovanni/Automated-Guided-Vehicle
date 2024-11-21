@@ -80,28 +80,32 @@ void Odometry::est_Speed(){
   delta_left_distance,
   delta_right_distance;
 
-  left_distance = Odometry::wl_counter * Odometry::wRes,
-  right_distance = Odometry::wr_counter * Odometry::wRes;
+  Odometry::Left_dist = Odometry::wl_counter * Odometry::wRes,
+  Odometry::Right_dist = Odometry::wr_counter * Odometry::wRes;
 
   if(millis() - prev_wl_timer > 100){
-    delta_left_distance = left_distance - prev_left_distance;
+    delta_left_distance = Odometry::Left_dist - prev_left_distance;
     Odometry::lspeed = delta_left_distance * 10;
 
-    prev_left_distance = left_distance;  
+    prev_left_distance = Odometry::Left_dist;  
     prev_wl_timer = millis();
   }
 
   if(millis() - prev_wr_timer > 100){
-    delta_right_distance = right_distance - prev_right_distance;
+    delta_right_distance = Odometry::Right_dist - prev_right_distance;
     Odometry::rspeed = delta_right_distance * 10;
 
-    prev_right_distance = right_distance;
+    prev_right_distance = Odometry::Right_dist;
     prev_wr_timer = millis();
   }
 }
 
+void Odometry::reset_Head(){
+
+}
+
 void Odometry::get_Pos(){
-  Odometry::y = (left_distance + right_distance) / 2;
+
 }
 
 void Odometry::reset_Pos(){
@@ -110,12 +114,17 @@ void Odometry::reset_Pos(){
   Odometry::theta = 0;
 }
 
-void Odometry::goTogoal(const double &inputX, const double &inputY, const double &inputTheta){
-  if(Odometry::x != inputX && Odometry::y != inputY && Odometry::theta != inputTheta){
+void Odometry::pwm_Out(){
+
+}
+
+bool Odometry::goTogoal(const double &inputX, const double &inputY, const double &inputTheta){
+  if(Odometry::x != inputX || Odometry::y != inputY || Odometry::theta != inputTheta){
     get_Pos();
 
-    if(inputX == 0 && inputY != 0){
-      
-    }
+    if(inputX == 0 && inputY != 0) 
+      return false;
+    else 
+      return true;
   }
 }
