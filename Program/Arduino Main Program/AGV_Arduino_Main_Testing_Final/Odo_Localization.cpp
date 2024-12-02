@@ -119,12 +119,5 @@ void Odometry::pwm_Out(){
 }
 
 bool Odometry::goTogoal(const double &inputX, const double &inputY, const double &inputTheta){
-  if(Odometry::x != inputX || Odometry::y != inputY || Odometry::theta != inputTheta){
-    get_Pos();
-
-    if(inputX == 0 && inputY != 0) 
-      return false;
-    else 
-      return true;
-  }
+  
 }

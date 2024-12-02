@@ -59,19 +59,21 @@ void Motor_Driver::motor_Stop(){
 }
 
 void Motor_Driver::set_Dir(motor_dir input_dir){
-  if(Motor_Driver::active_mode == ACTIVE_LOW)
+  if(Motor_Driver::active_mode == ACTIVE_LOW){
     if(input_dir == CW)
       digitalWrite(Motor_Driver::dir_Pin, LOW);
     
     else if(input_dir == CCW)
       digitalWrite(Motor_Driver::dir_Pin, HIGH);
+  }
 
-  else if(Motor_Driver::active_mode == ACTIVE_HIGH)
+  else if(Motor_Driver::active_mode == ACTIVE_HIGH){
     if(input_dir == CW)
       digitalWrite(Motor_Driver::dir_Pin, HIGH);
     
     else if(input_dir == CCW)
       digitalWrite(Motor_Driver::dir_Pin, LOW);
+  }
 }
 
 void Motor_Driver::set_Speed(uint8_t input_speed){

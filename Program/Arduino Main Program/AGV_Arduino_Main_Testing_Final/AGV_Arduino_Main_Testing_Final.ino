@@ -10,15 +10,16 @@
 //#define USE_OLD_PINOUT
 
 //#define TEST_PROXIMITY
-//#define TEST_PINHOOK
+#define TEST_PINHOOK
 //#define TEST_ODOMETRY
 //#define TEST_ODOMETRY_ROTASI
 //#define TEST_ENCODER
-#define TEST_SERIAL
+//#define TEST_SERIAL
 //#define TEST_MAIN
 
 /*User Private Include*/
 #include "Wire.h"
+#include "DFRobot_BNO055.h"
 #include "Adafruit_PN532.h"
 #include "PID_driver.h"
 #include "CustomSerial.h"
@@ -43,17 +44,17 @@
   #define SIG_LR      30   // Left Right Motor Start Stop (SIGNAL) <-PCB PIN
 #endif
 
-#define ENCL_A    14
-#define ENCL_B    15
-#define ENCL_C    20
+#define ENCL_A    55
+#define ENCL_B    14
+#define ENCL_C    15
 
-#define ENCR_A    16
-#define ENCR_B    17
-#define ENCR_C    21
+#define ENCR_A    55
+#define ENCR_B    16
+#define ENCR_C    17
 
 #ifdef USE_NEW_PINOUT
-  #define PROX_FRONT  12
-  #define PROX_REAR   13
+  #define PROX_REAR  12
+  #define PROX_FRONT 13
 #endif
 
 #ifdef USE_OLD_PINOUT
@@ -129,6 +130,7 @@ step_stack,
 stack_size,
 free_nodes_count,
 turning_decision,
+prev_goalX, prev_goalY,
 path_step[gridWidth*gridHeight];
 
 uint16_t
@@ -157,7 +159,9 @@ current_heading,
 prev_heading,
 update_heading,
 full_rotation_dist,
-current_distance;
+current_distance,
+current_position,
+prev_position;
 
 unsigned long
 prev_dummytick,   // -> Dummy Testing Tick
@@ -182,7 +186,9 @@ no_line = false,
 line_detected = false,
 front_state = false,
 rear_state = false,
-path_planned = false;
+path_planned = false,
+head_aligned = false,
+end_pos = false;
 
 String
 Tag_Start,
@@ -270,20 +276,35 @@ typedef enum{
   UP,
 }Hook_dir_t;
 
+typedef enum{
+  EUL_ROLL,
+  EUL_PITCH,
+  EUL_YAW,
+}Gyro_Eul_t;
+
+typedef enum{
+  ENC_MODE,
+  GYRO_MODE
+}Balancer_Mode_t;
+
 /*User Private Typedef Init*/
 Tag_Data_t NFC_F;
 Tag_Data_t NFC_R;
 
 Param_t parameter;
 
-PIDController pid_agv_f;  // -> PID Jalan Maju
-PIDController pid_agv_b;  // -> PID Jalan Mundur
-PIDController pid_odo;    // -> PID Odometry
+PIDController pid_agv_f;      // -> PID Jalan Maju
+PIDController pid_agv_b;      // -> PID Jalan Mundur
+PIDController pid_odo;        // -> PID Odometry
+PIDController pid_gyro_corr;  // -> PID Odometry Gyro Correction
 
+typedef DFRobot_BNO055_IIC  BNO;
+BNO::sEulAnalog_t eul_value;
 
 /*User Private Class Init*/
 Adafruit_PN532 nfc(IRQ_NFC1, 3);
 Odometry odometry(150, 413, 60);
+BNO bno(&Wire, 0x28);
 Motor_Driver L_Motor1(80, 100, ACTIVE_LOW);   // LF LEFT MOTOR
 Motor_Driver R_Motor1(80, 100, ACTIVE_LOW);   // LF RIGHT MOTOR
 Motor_Driver L_Motor2(80, 100, ACTIVE_HIGH);  // LIDAR LEFT MOTOR
@@ -292,7 +313,7 @@ Motor_Driver R_Motor2(80, 100, ACTIVE_HIGH);  // LIDAR RIGHT MOTOR
 /*User Private Function Declaration*/
 void Read_Sens(Sens_sel_t sensor_sel);
 void Calc_LF_PID(Sens_sel_t sensor_sel);
-void Calc_Balancer_PID(void);
+void Calc_Balancer_PID(Balancer_Mode_t sel_mode);
 void Line_Check(uint8_t mode);
 bool Line_Search(Sens_sel_t sensor_sel);
 void PinHook_Handler(Hook_dir_t dir);
@@ -300,16 +321,19 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
 void Run_AGV(uint8_t agv_mode);
 void Destination_Handler(void);
 
+bool Station_Handler(void);
+
 void NFC_Handler(NFC_Select_t select);
 void Turn_Check(NFC_Select_t select);
 void Cross_Check(NFC_Select_t select);
 void Station_Check(NFC_Select_t select);
 void Nodes_check(NFC_Select_t select);
-bool Run_Path_Planning(void);
+void Run_Path_Planning(void);
 
 bool Read_Proximity(Sens_sel_t sensor_sel);
 float Read_Voltage(void);
 float Read_Current(void);
+float Read_Gyro(Gyro_Eul_t sel_angle);
 float Check_Battery_Cappacity(void);
 
 NFC_Status_t NFC_readData(Tag_Data_t *nfc);
@@ -322,7 +346,8 @@ bool Run_AStar(Point start, Point goal);
 void Reconstruct_Path(Point start, Point goal, char displayGrid[gridWidth][gridHeight]);
 void Reconstruct_PathDir(void);
 
-bool Change_Heading(double start_heading, double end_heading, double tollerance);
+void Change_Heading(double start_heading, double end_heading, double tollerance);
+void GoTo(double start_position, double end_position, double tollerance);
 
 /*User Main Program*/
 void setup(){
@@ -337,12 +362,6 @@ void setup(){
 
   pinMode(PROX_FRONT, INPUT);
   pinMode(PROX_REAR, INPUT);
-
-  // Motor Pin Setup
-  L_Motor1.driver_Pinset(ENA_L, PWM_L, DIR_L, SIG_LR);
-  R_Motor1.driver_Pinset(ENA_R, PWM_R, DIR_R, SIG_LR);
-  L_Motor2.driver_Pinset(ENA_L, PWM_L, DIR_L, SIG_LR);
-  R_Motor2.driver_Pinset(ENA_R, PWM_R, DIR_R, SIG_LR);
 
   #ifdef USE_OLD_PIN
     digitalWrite(SIG_LR, HIGH);
@@ -405,14 +424,30 @@ void setup(){
 	pid_odo.T_sample    = 0.01;
   PIDController_Init(&pid_odo);
 
-  //NFC_F.tagType = HOME_SIGN;
+  // PID Gyro Correction Setup
+  pid_gyro_corr.Kp          = 0.00;
+  pid_gyro_corr.Ki          = 0.00;       
+  pid_gyro_corr.Kd          = 0.00; 		
+  pid_gyro_corr.tau         = 0.01;
+	pid_gyro_corr.limMax      = 50.00;     
+  pid_gyro_corr.limMin      = -50.00;     
+  pid_gyro_corr.limMaxInt   = 5.00; 	   
+  pid_gyro_corr.limMinInt   = -5.00;
+	pid_gyro_corr.T_sample    = 0.01;
+  PIDController_Init(&pid_gyro_corr);
+
+  NFC_F.tagType = HOME_SIGN;
   parameter.Running_Mode = LIDAR_MODE;
 
   while(1){
     digitalWrite(PILOTLAMP_PIN, LOW);
-    Receive_Serial(&parameter);
+    //Receive_Serial(&parameter);
 
     if(parameter.Running_Mode == LF_MODE){
+      // Motor Pin Setup
+      L_Motor1.driver_Pinset(ENA_L, PWM_L, DIR_L, SIG_LR);
+      R_Motor1.driver_Pinset(ENA_R, PWM_R, DIR_R, SIG_LR);
+
       // NFC Pin Setup
       pinMode(IRQ_NFC1, OUTPUT);
       pinMode(IRQ_NFC2, OUTPUT);
@@ -422,47 +457,64 @@ void setup(){
       // NFC Setup
       nfc.begin();
       nfc.SAMConfig();
+
+      digitalWrite(PILOTLAMP_PIN, HIGH);
+      delay(500);
+      digitalWrite(PILOTLAMP_PIN, LOW);
       break;
     }
 
     else if(parameter.Running_Mode == LIDAR_MODE){
+      // Motor Pin Setup
+      L_Motor2.driver_Pinset(ENA_L, PWM_L, DIR_L, SIG_LR);
+      R_Motor2.driver_Pinset(ENA_R, PWM_R, DIR_R, SIG_LR);
+
       // Encoder Pin Setup
       odometry.enc_Pinset(ENCL_A, ENCL_B, ENCL_C, ENCR_A, ENCR_B, ENCR_C);
+
+      // BNO Setup
+      /*
+      bno.reset();
+      while(bno.begin() != BNO::eStatusOK) {
+        Serial.println("bno begin faild");
+        delay(1000);
+      }
+      Serial.println("bno begin success");
+      */
+
+      digitalWrite(PILOTLAMP_PIN, HIGH);
+      delay(500);
+      digitalWrite(PILOTLAMP_PIN, LOW);
       break;
     }
-
     else continue;
   }
 }
 
 void loop(){
-  #ifdef TEST_PROXIMITY
+  digitalWrite(SPEAKER_PIN, HIGH);
+
+  #ifdef TEST_PROXIMITY 
+    front_state = Read_Proximity(FRONT);
     rear_state = Read_Proximity(REAR);
-    Serial.print("Sensor: ");
+
+    Serial.print("State 1: ");
+    Serial.print(front_state);
+    Serial.print("\t");
+    Serial.print("State 2: ");
     Serial.println(rear_state);
   #endif
 
   #ifdef TEST_PINHOOK
-    Serial.print(digitalRead(LS1));
+    Serial.print(!digitalRead(LS1));
     Serial.print(" ");
-    Serial.println(digitalRead(LS2));
+    Serial.println(!digitalRead(LS2));
 
-    PinHook_Handler(UP);
+    PinHook_Handler(DOWN);
   #endif
 
   #ifdef TEST_ODOMETRY
-    odometry.y1 = 1500;
-
-    if(odometry.y < odometry.y1){
-      odometry.enc_Read();
-      odometry.est_Speed();
-      odometry.get_Pos();
-      Motor_Handler(LIDAR_MODE, FORWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
-    }
-
-    else{
-      Motor_Handler(LIDAR_MODE, BRAKE, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
-    }
+    GoTo(0, 1500, 150);
 
     Serial.print("Left Counter: ");
     Serial.print(odometry.wl_counter);
@@ -473,29 +525,30 @@ void loop(){
     Serial.print("  ");
 
     Serial.print("Distance: ");
-    Serial.println(odometry.y);
+    Serial.println(current_position);
   #endif
 
   #ifdef TEST_ODOMETRY_ROTASI
-  //Motor_Handler(LIDAR_MODE, ROTATE_RIGHT, NORMAL_ACCEL, NORMAL_BRAKE, 50);
-  Change_Heading(0, 90, 12);
+  //Motor_Handler(LIDAR_MODE, ROTATE_RIGHT, NORMAL_ACCEL, NORMAL_BRAKE, 50)
+  //digitalWrite(SPEAKER_PIN, HIGH);
+  //Change_Heading(0, 90, 12);
+  eul_value = bno.getEul();
+  Serial.print(" head: "); Serial.print(eul_value.head); Serial.print(" roll: "); Serial.print(eul_value.roll);  Serial.print(" pitch: "); Serial.println(eul_value.pitch);
   #endif
 
   #ifdef TEST_ENCODER
-    Motor_Handler(LIDAR_MODE, FORWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
+    Motor_Handler(LIDAR_MODE, FORWARD, NORMAL_ACCEL, NORMAL_BRAKE, 80);
 
-    Serial.print(digitalRead(ENCL_A));
+    Serial.print(digitalRead(ENCR_A));
     Serial.print("\t");
 
-    Serial.print(digitalRead(ENCL_B) + 2);
+    Serial.print(digitalRead(ENCR_B) + 2);
     Serial.print("\t");
 
-    Serial.println(digitalRead(ENCL_C) + 4);
+    Serial.println(digitalRead(ENCR_C) + 4);
   #endif
 
   #ifdef TEST_SERIAL
-    Receive_Serial(&parameter);
-    /*
     if(!config_done){
       digitalWrite(LED_BUILTIN, LOW);
       Receive_Serial(&parameter);
@@ -522,9 +575,7 @@ void loop(){
         config_done = false;
       }
     }
-    */
 
-    /*
     parameter.Current_Pos = 1;
     parameter.CurrentPos_Value = 1000;
     parameter.Tag_sign = 1;
@@ -541,7 +592,6 @@ void loop(){
     Transmit_Serial(&parameter);
 
     delay(500);
-    */
   #endif
 
   #ifdef TEST_MAIN
@@ -623,6 +673,11 @@ void loop(){
     }
 
     else if(config_done){
+      parameter.Start_coordinateX = 0;
+      parameter.Start_coordinateY = 0;
+      parameter.Goal_coordinateX = 1;
+      parameter.Goal_coordinateY = 1;
+
       switch(parameter.Running_State){
         case START:
         parameter.Current_Pos = ON_THE_WAY;
@@ -647,10 +702,6 @@ void loop(){
           Receive_Serial(&parameter);
           prev_tickComrx = millis();
         }
-
-        if(parameter.Running_Dir == FORWARD) Calc_LF_PID(FRONT);
-        else if(parameter.Running_Dir == BACKWARD) Calc_LF_PID(REAR);
-        Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
         break;
       }
     }
@@ -743,9 +794,26 @@ void Calc_LF_PID(Sens_sel_t sensor_sel){
 }
 
 // PID Balancer Calculation Function
-void Calc_Balancer_PID(void){
-  PIDController_Update(&pid_odo, 0, (odometry.wl_counter - odometry.wr_counter));
-  balancer_pid_val = (-1)*pid_odo.out;
+void Calc_Balancer_PID(Balancer_Mode_t sel_mode){
+  double start_angle, current_angle;
+
+  if(start_angle == 0)
+    start_angle = Read_Gyro(EUL_YAW);
+
+  else
+    start_angle = start_angle;
+
+  if(sel_mode == ENC_MODE){
+    PIDController_Update(&pid_odo, 0, (odometry.wl_counter - odometry.wr_counter));
+    balancer_pid_val = pid_odo.out;
+  }
+
+  else if(sel_mode == GYRO_MODE){
+    current_angle = Read_Gyro(EUL_YAW);
+
+    PIDController_Update(&pid_gyro_corr, start_angle, current_angle);
+    balancer_pid_val = pid_gyro_corr.out;
+  }
 }
 
 // Line Check Subroutine Function
@@ -810,7 +878,7 @@ void PinHook_Handler(Hook_dir_t dir){
   if(dir != prev_dir) hook_state = 0;
 
   if(dir == DOWN && hook_state == 0){
-    if(digitalRead(LS1) == HIGH) digitalWrite(SERVO_HOOK, HIGH);
+    if(!digitalRead(LS1) == HIGH) digitalWrite(SERVO_HOOK, HIGH);
     else{
       hook_state = 1;
       digitalWrite(SERVO_HOOK, LOW);
@@ -823,7 +891,6 @@ void PinHook_Handler(Hook_dir_t dir){
       digitalWrite(SERVO_HOOK, LOW);
     }
   }
-
   prev_dir = dir;
 }
 
@@ -834,6 +901,35 @@ bool Read_Proximity(Sens_sel_t sensor_sel){
   else if(sensor_sel == REAR) value = !digitalRead(PROX_REAR);
 
   return value;
+}
+
+// Read Battery Voltage
+float Read_Voltage(void){
+
+}
+
+// Read Battery Current
+float Read_Current(void){
+
+}
+
+// Read Gyro Euller Angle
+float Read_Gyro(Gyro_Eul_t sel_angle){
+  BNO::sEulAnalog_t angle = bno.getEul();
+
+  if(sel_angle == EUL_ROLL)
+    return (float)angle.roll;
+
+  else if(sel_angle == EUL_PITCH)
+    return (float)angle.pitch;
+
+  else if(sel_angle == EUL_YAW)
+    return (float)angle.head;
+}
+
+// Check Battery Cappacity
+float Check_Battery_Cappacity(void){
+
 }
 
 // LF Motor Handler Function
@@ -861,8 +957,6 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     else if(mode == LIDAR_MODE){
       L_Motor2.driver_Enable();
       R_Motor2.driver_Enable();
-
-      Calc_Balancer_PID();
      
       L_Motor2.set_Dir(CCW);
       R_Motor2.set_Dir(CW);
@@ -951,8 +1045,6 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     else if(mode == LIDAR_MODE){
       L_Motor2.driver_Enable();
       R_Motor2.driver_Enable();
-
-      Calc_Balancer_PID();
      
       L_Motor2.set_Dir(CW);
       R_Motor2.set_Dir(CCW);
@@ -1210,39 +1302,20 @@ void Run_AGV(uint8_t agv_mode){
     break;
 
     case LIDAR_MODE:
-    odometry.y1 = 1500;
-
-    if(parameter.Running_Dir == FORWARD){
-      if(odometry.y < odometry.y1 - 150){
-        odometry.enc_Read();
-        odometry.est_Speed();
-        odometry.get_Pos();
-        Motor_Handler(LIDAR_MODE, FORWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
-      }
-
-      else{
-        Motor_Handler(LIDAR_MODE, BRAKE, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
-      }
-    }
-
-    if(parameter.Running_Dir == BACKWARD){
-      if(odometry.y > odometry.y1 + 150){
-        odometry.enc_Read();
-        odometry.est_Speed();
-        odometry.get_Pos();
-        Motor_Handler(LIDAR_MODE, BACKWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
-      }
-
-      else{
-        Motor_Handler(LIDAR_MODE, BRAKE, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
-      }
-    }
+    GoTo(parameter.Start_coordinateY, parameter.Goal_coordinateY, 150);
     break;
   }
 }
 
 // Destination To Current Position Check FUnction
 void Destination_Handler(void){
+  if(prev_goalX != parameter.Goal_coordinateX || prev_goalY != parameter.Goal_coordinateY){
+    prev_goalX = parameter.Goal_coordinateX;
+    prev_goalY = parameter.Goal_coordinateY;
+
+    path_planned = false;
+  } 
+
   if(turning_decision == TURN_STOP){
     if(parameter.Tag_sign == HOME_SIGN){
       parameter.Current_Pos = HOME;
@@ -1267,9 +1340,29 @@ void Destination_Handler(void){
       parameter.CurrentPos_Value = parameter.Tag_value;
       Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
       digitalWrite(SIG_LR, HIGH);
+
+      while(1){
+        if(Station_Handler == true) break;
+        else continue;
+      }
+
+      turning_decision = NONE_TURN;
       parameter.Running_State = PAUSE;
     }
   }
+
+  else if(turning_decision != TURN_STOP && path_planned == false){
+    Run_Path_Planning();
+  }
+}
+
+
+// Station Package Sync Algorithm
+bool Station_Handler(void){
+  rear_state = Read_Proximity(REAR);
+
+  if(rear_state != 1) return false;
+  else return true;
 }
 
 // Turning Check Function
@@ -1363,17 +1456,19 @@ void Cross_Check(NFC_Select_t select){
 }
 
 // PATH PLANNING FUNCTION
-bool Run_Path_Planning(void){
+void Run_Path_Planning(void){
   Point start_pos(parameter.Start_coordinateX, parameter.Start_coordinateY);
   Point goal_pos(parameter.Goal_coordinateX, parameter.Goal_coordinateY);
 
-  if(!Run_AStar(start_pos, goal_pos))
-    return false;
+  if(!Run_AStar(start_pos, goal_pos)){
+    path_planned = false;
+  }
 
-  else
+  else{
     Reconstruct_Path(start_pos, goal_pos);
     Reconstruct_PathDir();
-    return true;
+    path_planned = true;
+  }
 }
 
 // NODES CHECK FUNCTION
@@ -1679,39 +1774,57 @@ void Reconstruct_PathDir(void){
 }
 
 // CHANGE HEADING POSITION
-bool Change_Heading(double start_heading, double end_heading, double tollerance){
+void Change_Heading(double start_heading, double end_heading, double tollerance){
   full_rotation_dist = 2 * M_PI * (odometry.wL/2);
 
   if(end_heading != prev_heading){
     current_heading = start_heading + update_heading;
     Serial.println(current_heading);
 
-    if(start_heading > end_heading){
-      odometry.enc_Read();
-      odometry.est_Speed();
+    odometry.enc_Read();
+    odometry.est_Speed();
 
-      current_distance = (odometry.Left_dist + odometry.Right_dist) / 2;
-      update_heading = (current_distance / full_rotation_dist) * 360;
+    current_distance = (odometry.Left_dist + odometry.Right_dist) / 2;
+    update_heading = (current_distance / full_rotation_dist) * 360;
 
+    if(start_heading > end_heading)
       Motor_Handler(LIDAR_MODE, ROTATE_RIGHT, NORMAL_ACCEL, NORMAL_BRAKE, 50);
-    }
 
-    else if(end_heading > start_heading){
-      odometry.enc_Read();
-      odometry.est_Speed();
-
-      current_distance = (odometry.Left_dist + odometry.Right_dist) / 2;
-      update_heading = (current_distance / full_rotation_dist) * 360;
-
+    else if(end_heading > start_heading)
       Motor_Handler(LIDAR_MODE, ROTATE_LEFT, NORMAL_ACCEL, NORMAL_BRAKE, 50);
-    }
 
     if(current_heading >= end_heading - tollerance && current_heading <= end_heading + tollerance){
       digitalWrite(PILOTLAMP_PIN, HIGH);
       Motor_Handler(LIDAR_MODE, BRAKE, NORMAL_ACCEL, NORMAL_BRAKE, 50);
       prev_heading = end_heading;
-      return true;
+      head_aligned =  true;
     }
-    else return false;
+    else head_aligned = false;
   }
+}
+
+// Go To Destination Point From Start Point
+void GoTo(double start_position, double end_position, double tollerance){
+  if(end_position != prev_position){
+    Calc_Balancer_PID(ENC_MODE);
+    odometry.enc_Read();
+    odometry.est_Speed();
+    current_position = start_position + ((odometry.Right_dist + odometry.Left_dist)/2);
+    Motor_Handler(LIDAR_MODE, FORWARD, NORMAL_ACCEL, REGENERATIVE_BRAKE, 50);
+    
+    if(start_position < end_position)
+      Motor_Handler(LIDAR_MODE, FORWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 50);
+
+    else if(start_position > end_position)
+      Motor_Handler(LIDAR_MODE, BACKWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 50);
+
+    if(current_position >= end_position - tollerance && current_position <= end_position + tollerance){
+      digitalWrite(PILOTLAMP_PIN, HIGH);
+      Motor_Handler(LIDAR_MODE, BRAKE, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 50);
+      prev_position = end_position;
+      end_pos =  true;
+    }
+  }
+
+  else end_pos = false;
 }

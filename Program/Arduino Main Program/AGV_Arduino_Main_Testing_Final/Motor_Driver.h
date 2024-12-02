@@ -16,8 +16,7 @@ enum motor_dir {CW, CCW};
 
 class Motor_Driver{
   private:
-    uint8_t
-    ena_Pin, pwm_Pin, dir_Pin, sig_Pin;
+    
 
     uint8_t
     active_mode,
@@ -25,6 +24,9 @@ class Motor_Driver{
     max_speed;
 
   public:
+    uint8_t
+    ena_Pin, pwm_Pin, dir_Pin, sig_Pin;
+
     uint8_t 
     L_speed,
     R_speed;
