@@ -6,15 +6,15 @@
   Author  : Alfonsus Giovanni Mahendra Puta - Universitas Diponegoro
 */
 
-#define USE_NEW_PINOUT
-//#define USE_OLD_PINOUT
+//#define USE_NEW_PINOUT
+#define USE_OLD_PINOUT
 
 //#define TEST_PROXIMITY
-#define TEST_PINHOOK
+//#define TEST_PINHOOK
 //#define TEST_ODOMETRY
 //#define TEST_ODOMETRY_ROTASI
 //#define TEST_ENCODER
-//#define TEST_SERIAL
+#define TEST_SERIAL
 //#define TEST_MAIN
 
 /*User Private Include*/
@@ -412,6 +412,17 @@ void setup(){
 	pid_agv_f.T_sample  = 0.01;
   PIDController_Init(&pid_agv_f);
 
+  pid_agv_b.Kp        = 1.115;
+  pid_agv_b.Ki        = 0.001;       
+  pid_agv_b.Kd        = 0.035; 		
+  pid_agv_b.tau       = 0.01;
+	pid_agv_b.limMax    = 100;     
+  pid_agv_b.limMin    = -100;     
+  pid_agv_b.limMaxInt = 5.0; 	   
+  pid_agv_b.limMinInt = -5.0;
+	pid_agv_b.T_sample  = 0.01;
+  PIDController_Init(&pid_agv_b);
+
   // PID Odometry Setup
   pid_odo.Kp          = 2.5;
   pid_odo.Ki          = 0.00;       
@@ -557,7 +568,7 @@ void loop(){
         prev_dummytick = millis();
         config_done = true;
       }
-    } 
+    }
 
     else if(config_done){
       digitalWrite(LED_BUILTIN, HIGH);
@@ -709,7 +720,6 @@ void loop(){
 }
 
 /*User Private Function Initialize*/
-
 // Read Magnetic Line Sensor Function
 void Read_Sens(Sens_sel_t sensor_sel){
   total_weight = 0;
@@ -899,7 +909,6 @@ bool Read_Proximity(Sens_sel_t sensor_sel){
   bool value;
   if(sensor_sel == FRONT) value = !digitalRead(PROX_FRONT);
   else if(sensor_sel == REAR) value = !digitalRead(PROX_REAR);
-
   return value;
 }
 
@@ -1812,11 +1821,13 @@ void GoTo(double start_position, double end_position, double tollerance){
     current_position = start_position + ((odometry.Right_dist + odometry.Left_dist)/2);
     Motor_Handler(LIDAR_MODE, FORWARD, NORMAL_ACCEL, REGENERATIVE_BRAKE, 50);
     
-    if(start_position < end_position)
+    if(start_position < end_position){
       Motor_Handler(LIDAR_MODE, FORWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 50);
+    }
 
-    else if(start_position > end_position)
+    else if(start_position > end_position){
       Motor_Handler(LIDAR_MODE, BACKWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 50);
+    }
 
     if(current_position >= end_position - tollerance && current_position <= end_position + tollerance){
       digitalWrite(PILOTLAMP_PIN, HIGH);
