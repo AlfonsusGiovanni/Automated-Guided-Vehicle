@@ -6,15 +6,17 @@
   Author  : Alfonsus Giovanni Mahendra Puta - Universitas Diponegoro
 */
 
-//#define USE_NEW_PINOUT
-#define USE_OLD_PINOUT
+#define USE_NEW_PINOUT
+//#define USE_OLD_PINOUT
 
 //#define TEST_PROXIMITY
+//#define TEST_BATTERY
 //#define TEST_PINHOOK
-//#define TEST_ODOMETRY
+#define TEST_ODOMETRY
 //#define TEST_ODOMETRY_ROTASI
 //#define TEST_ENCODER
-#define TEST_SERIAL
+//#define TEST_LINE
+//#define TEST_SERIAL
 //#define TEST_MAIN
 
 /*User Private Include*/
@@ -83,6 +85,9 @@
   #define PILOTLAMP_PIN   46
 #endif
 
+#define VOLTAGE_SENS_PIN  A14
+#define CURRENT_SENS_PIN  A15
+
 #define SENS_NUM  16
 #define DATA_AUTH_HEADER    0xFF
 
@@ -149,10 +154,22 @@ int
 total_weight,
 sens_count;
 
+const float
+VCC = 5.00,
+cutOffLimit = 1.00,
+sensitivity = 40.0,
+quiescent_Output_voltage = 0.5,
+FACTOR = sensitivity/1000,
+QOV = quiescent_Output_voltage * VCC,
+cutOff = FACTOR/cutOffLimit;
+
 float
 line_pos,
 lf_pid_val,
-balancer_pid_val;
+balancer_pid_val,
+bat_voltage,
+bat_current,
+bat_power;
 
 double
 current_heading,
@@ -164,7 +181,8 @@ current_position,
 prev_position;
 
 unsigned long
-prev_dummytick,   // -> Dummy Testing Tick
+prev_dummytick1,  // -> Dummy Testing Tick 1
+prev_dummytick2,  // -> Dummy Testing Tick 2
 prev_tickComtx,   // -> Timer Serial Com TX
 prev_tickComrx,   // -> Timer Serial Com RX
 prev_turningTick, // -> Turning Reset Tick
@@ -331,8 +349,6 @@ void Nodes_check(NFC_Select_t select);
 void Run_Path_Planning(void);
 
 bool Read_Proximity(Sens_sel_t sensor_sel);
-float Read_Voltage(void);
-float Read_Current(void);
 float Read_Gyro(Gyro_Eul_t sel_angle);
 float Check_Battery_Cappacity(void);
 
@@ -362,6 +378,9 @@ void setup(){
 
   pinMode(PROX_FRONT, INPUT);
   pinMode(PROX_REAR, INPUT);
+
+  pinMode(CURRENT_SENS_PIN, INPUT);
+  pinMode(VOLTAGE_SENS_PIN, INPUT);
 
   #ifdef USE_OLD_PIN
     digitalWrite(SIG_LR, HIGH);
@@ -500,6 +519,11 @@ void setup(){
     }
     else continue;
   }
+
+  while(1){
+    if(digitalRead(START_BTN) == LOW) break;
+    else continue;
+  }
 }
 
 void loop(){
@@ -516,12 +540,24 @@ void loop(){
     Serial.println(rear_state);
   #endif
 
-  #ifdef TEST_PINHOOK
-    Serial.print(!digitalRead(LS1));
-    Serial.print(" ");
-    Serial.println(!digitalRead(LS2));
+  #ifdef TEST_BATTERY
+    Check_Battery_Cappacity();
+    Serial.print("Voltage: ");
+    
+    Serial.println(bat_voltage);
 
+    delay(500);
+  #endif
+
+  #ifdef TEST_PINHOOK
+    Serial.print(digitalRead(LS1));
+    Serial.print(" ");
+    Serial.println(digitalRead(LS2));
+
+    PinHook_Handler(UP);
+    delay(2000);
     PinHook_Handler(DOWN);
+    delay(2000);
   #endif
 
   #ifdef TEST_ODOMETRY
@@ -559,13 +595,17 @@ void loop(){
     Serial.println(digitalRead(ENCR_C) + 4);
   #endif
 
+  #ifdef TEST_LINE
+    Motor_Handler(LF_MODE, FORWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
+  #endif
+
   #ifdef TEST_SERIAL
     if(!config_done){
       digitalWrite(LED_BUILTIN, LOW);
       Receive_Serial(&parameter);
 
       if(parameter.Running_Mode != NOT_SET && parameter.Running_State == START){
-        prev_dummytick = millis();
+        prev_dummytick1 = millis();
         config_done = true;
       }
     }
@@ -580,7 +620,7 @@ void loop(){
 
       Transmit_Serial(&parameter);
 
-      if(millis() - prev_dummytick > 5000){
+      if(millis() - prev_dummytick1 > 5000){
         parameter.Running_Mode = NOT_SET;
         parameter.Running_State = STOP;
         config_done = false;
@@ -616,19 +656,19 @@ void loop(){
 
         // Check if there is no line and home tag detected
         if(!line_detected && NFC_F.tagType != HOME_SIGN){
-          if(millis() - prev_dummytick > 150){
+          if(millis() - prev_dummytick1 > 150){
             if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
             else digitalWrite(PILOTLAMP_PIN, LOW);
-            prev_dummytick = millis();
+            prev_dummytick1 = millis();
           }
         }
 
         // Check if line is detected but home tag is not
         else if(line_detected && NFC_F.tagType != HOME_SIGN){
-          if(millis() - prev_dummytick > 500){
+          if(millis() - prev_dummytick1 > 500){
             if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
             else digitalWrite(PILOTLAMP_PIN, LOW);
-            prev_dummytick = millis();
+            prev_dummytick1 = millis();
           }
           head_dir = HEAD_XP;
         }
@@ -699,10 +739,10 @@ void loop(){
         break;
 
         case STOP:
-        if(millis() > prev_dummytick > 500){
+        if(millis() > prev_dummytick1 > 500){
           if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
           else digitalWrite(PILOTLAMP_PIN, LOW);
-          prev_dummytick = millis();
+          prev_dummytick1 = millis();
         }
 
         Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
@@ -887,21 +927,23 @@ bool Line_Search(Sens_sel_t sensor_sel){
 void PinHook_Handler(Hook_dir_t dir){
   if(dir != prev_dir) hook_state = 0;
 
-  if(dir == DOWN && hook_state == 0){
-    if(!digitalRead(LS1) == HIGH) digitalWrite(SERVO_HOOK, HIGH);
-    else{
-      hook_state = 1;
-      digitalWrite(SERVO_HOOK, LOW);
+  while(hook_state == 0){
+    if(dir == DOWN && hook_state == 0){
+      if(digitalRead(LS1) == HIGH) digitalWrite(SERVO_HOOK, HIGH);
+      else{
+        hook_state = 1;
+        digitalWrite(SERVO_HOOK, LOW);
+      }
     }
-  }
-  else if(dir == UP && hook_state == 0){
-    if(!digitalRead(LS2) == HIGH) digitalWrite(SERVO_HOOK, HIGH);
-    else{
-      hook_state = 1;
-      digitalWrite(SERVO_HOOK, LOW);
+    else if(dir == UP && hook_state == 0){
+      if(!digitalRead(LS2) == HIGH) digitalWrite(SERVO_HOOK, HIGH);
+      else{
+        hook_state = 1;
+        digitalWrite(SERVO_HOOK, LOW);
+      }
     }
+    prev_dir = dir;
   }
-  prev_dir = dir;
 }
 
 // Proximity Sensor Read Function
@@ -910,16 +952,6 @@ bool Read_Proximity(Sens_sel_t sensor_sel){
   if(sensor_sel == FRONT) value = !digitalRead(PROX_FRONT);
   else if(sensor_sel == REAR) value = !digitalRead(PROX_REAR);
   return value;
-}
-
-// Read Battery Voltage
-float Read_Voltage(void){
-
-}
-
-// Read Battery Current
-float Read_Current(void){
-
 }
 
 // Read Gyro Euller Angle
@@ -938,7 +970,13 @@ float Read_Gyro(Gyro_Eul_t sel_angle){
 
 // Check Battery Cappacity
 float Check_Battery_Cappacity(void){
+  float raw_current = (5.0/1023) * analogRead(CURRENT_SENS_PIN);
+  bat_current = (raw_current - QOV + 0.007) / FACTOR;
 
+  float raw_voltage = analogRead(VOLTAGE_SENS_PIN) * (5.0/1024) * 5.35;
+  bat_voltage = (raw_voltage * (4700 + 1100) / 1100);
+
+  bat_power = bat_voltage * bat_current;
 }
 
 // LF Motor Handler Function
