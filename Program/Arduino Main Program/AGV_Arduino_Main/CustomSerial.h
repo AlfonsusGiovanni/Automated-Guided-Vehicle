@@ -76,23 +76,31 @@ typedef struct{
   uint8_t
   Running_Mode,
   Base_Speed,
+  Left_Speed,
+  Right_Speed,
   Running_State,
   Running_Dir,
   Running_Accel,
   Running_Brake,
-  Start_Pos,
-  Destination,
   Current_Pos,
   SensorA_Status,
   SensorB_Status,
-  Tag_sign;
+  Tag_sign,
+  Start_coordinateX,
+  Start_coordinateY,
+  Goal_coordinateX,
+  Goal_coordinateY,
+  Current_coordinateX,
+  Current_coordinateY;
 
   uint16_t
   Tag_value,
   Tag_num,
   CurrentPos_Value,
   Send_counter,
-  Pickup_counter;
+  Pickup_counter,
+  Left_enc_counter,
+  Right_enc_counter;
 
   int16_t
   Xpos,
@@ -101,7 +109,7 @@ typedef struct{
   float Battery_level;
 }Param_t;
 
-uint8_t Receive_Serial(Param_t *param);
-uint8_t Transmit_Serial(Param_t *param);
+void Receive_Serial(Param_t *param);
+void Transmit_Serial(Param_t *param);
 
 #endif

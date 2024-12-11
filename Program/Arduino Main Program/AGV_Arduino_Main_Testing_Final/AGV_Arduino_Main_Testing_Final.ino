@@ -11,10 +11,11 @@
 
 //#define TEST_PROXIMITY
 //#define TEST_BATTERY
+//#define TEST_NFC
 //#define TEST_PINHOOK
-#define TEST_ODOMETRY
+#define TEST_ENCODER
+//#define TEST_ODOMETRY
 //#define TEST_ODOMETRY_ROTASI
-//#define TEST_ENCODER
 //#define TEST_LINE
 //#define TEST_SERIAL
 //#define TEST_MAIN
@@ -159,9 +160,9 @@ VCC = 5.00,
 cutOffLimit = 1.00,
 sensitivity = 40.0,
 quiescent_Output_voltage = 0.5,
-FACTOR = sensitivity/1000,
-QOV = quiescent_Output_voltage * VCC,
-cutOff = FACTOR/cutOffLimit;
+FACTOR = 0.04,
+QOV = 2.5,
+cutOff = 0.04;
 
 float
 line_pos,
@@ -206,21 +207,33 @@ front_state = false,
 rear_state = false,
 path_planned = false,
 head_aligned = false,
-end_pos = false;
+end_pos = false,
+independent_inputspeed = false;
 
 String
 Tag_Start,
 Tag_Destination;
 
+// int grid[gridHeight][gridWidth] = {
+//   {0, 1, 1, 1, 1, 1, 1, 0},
+//   {0, 1, 1, 1, 1, 1, 1, 0},
+//   {0, 0, 0, 0, 0, 0, 0, 0},
+//   {0, 1, 0, 1, 1, 0, 1, 0},
+//   {0, 1, 0, 1, 1, 0, 1, 0},
+//   {1, 1, 0, 1, 1, 0, 1, 1},
+//   {1, 1, 0, 1, 1, 0, 1, 1},
+//   {1, 1, 0, 0, 0, 0, 1, 1},
+// };
+
 int grid[gridHeight][gridWidth] = {
-  {0, 1, 1, 1, 1, 1, 1, 0},
-  {0, 1, 1, 1, 1, 1, 1, 0},
   {0, 0, 0, 0, 0, 0, 0, 0},
-  {0, 1, 0, 1, 1, 0, 1, 0},
-  {0, 1, 0, 1, 1, 0, 1, 0},
-  {1, 1, 0, 1, 1, 0, 1, 1},
-  {1, 1, 0, 1, 1, 0, 1, 1},
-  {1, 1, 0, 0, 0, 0, 1, 1},
+  {0, 0, 0, 0, 0, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, 0, 0},
 };
 
 int 
@@ -338,6 +351,7 @@ void PinHook_Handler(Hook_dir_t dir);
 void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake, uint8_t speed);
 void Run_AGV(uint8_t agv_mode);
 void Destination_Handler(void);
+void Custom_Destination_Handler(void);
 
 bool Station_Handler(void);
 
@@ -382,7 +396,7 @@ void setup(){
   pinMode(CURRENT_SENS_PIN, INPUT);
   pinMode(VOLTAGE_SENS_PIN, INPUT);
 
-  #ifdef USE_OLD_PIN
+  #ifdef USE_OLD_PINOUT
     digitalWrite(SIG_LR, HIGH);
     delay(20);
     digitalWrite(ENA_R, LOW);
@@ -466,7 +480,8 @@ void setup(){
 	pid_gyro_corr.T_sample    = 0.01;
   PIDController_Init(&pid_gyro_corr);
 
-  NFC_F.tagType = HOME_SIGN;
+  // NFC_F.tagType = HOME_SIGN;
+  // parameter.Running_Mode = LF_MODE;
   parameter.Running_Mode = LIDAR_MODE;
 
   while(1){
@@ -521,13 +536,14 @@ void setup(){
   }
 
   while(1){
+    Serial.println(digitalRead(START_BTN));
     if(digitalRead(START_BTN) == LOW) break;
     else continue;
   }
 }
 
 void loop(){
-  digitalWrite(SPEAKER_PIN, HIGH);
+  digitalWrite(PILOTLAMP_PIN, HIGH);
 
   #ifdef TEST_PROXIMITY 
     front_state = Read_Proximity(FRONT);
@@ -543,10 +559,29 @@ void loop(){
   #ifdef TEST_BATTERY
     Check_Battery_Cappacity();
     Serial.print("Voltage: ");
-    
-    Serial.println(bat_voltage);
+    Serial.print(bat_voltage);
+    Serial.print("\t");
+    Serial.print("Current: ");
+    Serial.print(bat_current);
+    Serial.print("\t");
+    Serial.print("Power: ");
+    Serial.println(bat_power);
 
     delay(500);
+  #endif
+
+  #ifdef TEST_NFC
+    NFC_Handler(FRONT_NFC);
+
+    Serial.print("NFC Data: ");
+    for(int i=0; i<16; i++){
+      Serial.print("0x");
+      Serial.print(NFC_F.stored_data[i], HEX);
+      if(i<15) Serial.print("-");
+    }
+    Serial.println(" ");
+
+    delay(250);
   #endif
 
   #ifdef TEST_PINHOOK
@@ -558,29 +593,6 @@ void loop(){
     delay(2000);
     PinHook_Handler(DOWN);
     delay(2000);
-  #endif
-
-  #ifdef TEST_ODOMETRY
-    GoTo(0, 1500, 150);
-
-    Serial.print("Left Counter: ");
-    Serial.print(odometry.wl_counter);
-    Serial.print("  ");
-
-    Serial.print("Right Counter: ");
-    Serial.print(odometry.wr_counter);
-    Serial.print("  ");
-
-    Serial.print("Distance: ");
-    Serial.println(current_position);
-  #endif
-
-  #ifdef TEST_ODOMETRY_ROTASI
-  //Motor_Handler(LIDAR_MODE, ROTATE_RIGHT, NORMAL_ACCEL, NORMAL_BRAKE, 50)
-  //digitalWrite(SPEAKER_PIN, HIGH);
-  //Change_Heading(0, 90, 12);
-  eul_value = bno.getEul();
-  Serial.print(" head: "); Serial.print(eul_value.head); Serial.print(" roll: "); Serial.print(eul_value.roll);  Serial.print(" pitch: "); Serial.println(eul_value.pitch);
   #endif
 
   #ifdef TEST_ENCODER
@@ -595,8 +607,34 @@ void loop(){
     Serial.println(digitalRead(ENCR_C) + 4);
   #endif
 
+  #ifdef TEST_ODOMETRY
+    // GoTo(0, 1500, 150);
+    Motor_Handler(LIDAR_MODE, FORWARD, NORMAL_ACCEL, REGENERATIVE_BRAKE, 50);
+
+    Serial.print("Left Counter: ");
+    Serial.print(odometry.wl_counter);
+    Serial.print("  ");
+
+    Serial.print("Right Counter: ");
+    Serial.print(odometry.wr_counter);
+    Serial.print("  ");
+
+    Serial.print("Distance: ");
+    Serial.println(current_position);
+  #endif
+
+  #ifdef TEST_ODOMETRY_ROTASI
+  digitalWrite(SPEAKER_PIN, HIGH);
+  Change_Heading(0, 90, 12);
+  eul_value = bno.getEul();
+  Serial.print(" head: "); Serial.print(eul_value.head); Serial.print(" roll: "); Serial.print(eul_value.roll);  Serial.print(" pitch: "); Serial.println(eul_value.pitch);
+  #endif
+
   #ifdef TEST_LINE
-    Motor_Handler(LF_MODE, FORWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
+    Motor_Handler(LF_MODE, BACKWARD, NORMAL_ACCEL, REGENERATIVE_BRAKE, 80);
+    delay(2000);
+    Motor_Handler(LF_MODE, BRAKE, NORMAL_ACCEL, NORMAL_BRAKE, 80);
+    delay(5000);
   #endif
 
   #ifdef TEST_SERIAL
@@ -724,10 +762,7 @@ void loop(){
     }
 
     else if(config_done){
-      parameter.Start_coordinateX = 0;
-      parameter.Start_coordinateY = 0;
-      parameter.Goal_coordinateX = 1;
-      parameter.Goal_coordinateY = 1;
+      Check_Battery_Cappacity();
 
       switch(parameter.Running_State){
         case START:
@@ -971,7 +1006,7 @@ float Read_Gyro(Gyro_Eul_t sel_angle){
 // Check Battery Cappacity
 float Check_Battery_Cappacity(void){
   float raw_current = (5.0/1023) * analogRead(CURRENT_SENS_PIN);
-  bat_current = (raw_current - QOV + 0.007) / FACTOR;
+  bat_current = (raw_current - QOV + 0.007);
 
   float raw_voltage = analogRead(VOLTAGE_SENS_PIN) * (5.0/1024) * 5.35;
   bat_voltage = (raw_voltage * (4700 + 1100) / 1100);
@@ -985,9 +1020,16 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
   left_tolerance = 0,
   right_tolerance = 0;
 
+  balance_speedL = parameter.Left_Speed;
+  balance_speedR = parameter.Right_Speed;
+
+  if(balance_speedL > 0 || balance_speedR > 0) independent_inputspeed = true;
+  else independent_inputspeed = false;
+
   switch(direction){
     case FORWARD:
-
+    running = false;
+    
     if(mode == LF_MODE){
       L_Motor1.motor_Run();
       R_Motor1.motor_Run();
@@ -1020,8 +1062,14 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
       }
 
       else if(mode == LIDAR_MODE){
-        L_speed = speed  - balancer_pid_val;
-        R_speed = speed  + balancer_pid_val;
+        if(independent_inputspeed){
+          L_speed = speed  - balancer_pid_val;
+          R_speed = speed  + balancer_pid_val;
+        }
+        else{
+          L_speed = balance_speedL;
+          R_speed = balance_speedR;
+        }
 
         L_Motor2.set_Speed(L_speed);
         R_Motor2.set_Speed(R_speed);
@@ -1062,8 +1110,14 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
         }
 
         else if(mode == LIDAR_MODE){
-          L_speed = speed - balancer_pid_val;
-          R_speed = speed + balancer_pid_val;
+          if(independent_inputspeed){
+            L_speed = speed  - balancer_pid_val;
+            R_speed = speed  + balancer_pid_val;
+          }
+          else{
+            L_speed = balance_speedL;
+            R_speed = balance_speedR;
+          }
 
           L_Motor2.set_Speed(L_speed);
           R_Motor2.set_Speed(R_speed);
@@ -1076,6 +1130,8 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     break;
 
     case BACKWARD:
+    running = true;
+
     if(mode == LF_MODE){
       L_Motor1.motor_Run();
       R_Motor1.motor_Run();
@@ -1108,8 +1164,14 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
       }
 
       else if(mode == LIDAR_MODE){
-        L_speed = speed  + balancer_pid_val;
-        R_speed = speed  - balancer_pid_val;
+        if(independent_inputspeed){
+          L_speed = speed  + balancer_pid_val;
+          R_speed = speed  - balancer_pid_val;
+        }
+        else{
+          L_speed = balance_speedL;
+          R_speed = balance_speedR;
+        }
 
         L_Motor2.set_Speed(L_speed);
         R_Motor2.set_Speed(R_speed);
@@ -1289,31 +1351,36 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
       if(running){
         for(int i=speed; i>= 0; i-=brake_val){
           if(mode == LF_MODE){
-            L_Motor1.set_Speed(L_speed);
-            R_Motor1.set_Speed(R_speed);
+            L_Motor1.set_Speed(i);
+            R_Motor1.set_Speed(i);
           }
 
           else if(mode == LIDAR_MODE){
-            L_Motor2.set_Speed(L_speed);
-            R_Motor2.set_Speed(R_speed);
+            L_Motor2.set_Speed(i);
+            R_Motor2.set_Speed(i);
           }
+          Serial.println(i);
           delay(regenerative_interval);
         }
+
+        if(mode == LF_MODE){
+          L_Motor1.motor_Stop();
+          R_Motor1.motor_Stop();
+
+          L_Motor1.driver_Enable();
+          R_Motor1.driver_Enable();
+        }
+
+        else if(mode == LIDAR_MODE){
+          L_Motor2.driver_Disable();
+          R_Motor2.driver_Disable();
+        }
+        running = false;
       }
 
-      if(mode == LF_MODE){
-        L_Motor1.motor_Run();
-        R_Motor1.motor_Run();
-
-        L_Motor1.driver_Disable();
-        R_Motor1.driver_Disable();
+      else if(!running){
+        
       }
-
-      else if(mode == LIDAR_MODE){
-        L_Motor2.driver_Disable();
-        R_Motor2.driver_Disable();
-      }
-      running = false;
       break;
     }
     break;
@@ -1349,7 +1416,11 @@ void Run_AGV(uint8_t agv_mode){
     break;
 
     case LIDAR_MODE:
-    GoTo(parameter.Start_coordinateY, parameter.Goal_coordinateY, 150);
+    if(parameter.Start_coordinateY > 0 || parameter.Goal_coordinateY > 0){
+      parameter.Left_enc_counter = odometry.wl_counter;
+      parameter.Right_enc_counter = odometry.wr_counter;
+      GoTo(parameter.Start_coordinateY, parameter.Goal_coordinateY, 150);
+    }
     break;
   }
 }
@@ -1389,7 +1460,7 @@ void Destination_Handler(void){
       digitalWrite(SIG_LR, HIGH);
 
       while(1){
-        if(Station_Handler == true) break;
+        if(Station_Handler() == true) break;
         else continue;
       }
 
@@ -1401,6 +1472,24 @@ void Destination_Handler(void){
   else if(turning_decision != TURN_STOP && path_planned == false){
     Run_Path_Planning();
   }
+}
+
+// Custom Destination Handler Without Path Planning
+void Custom_Destination_Handler(void){
+  if(parameter.Current_coordinateX != parameter.Goal_coordinateX || parameter.Current_coordinateX != parameter.Goal_coordinateY){
+    parameter.Current_Pos = ON_STATION;
+    parameter.CurrentPos_Value = parameter.Tag_value;
+    Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
+    digitalWrite(SIG_LR, HIGH);
+
+    while(1){
+      if(Station_Handler() == true) break;
+      else continue;
+    }
+
+    turning_decision = NONE_TURN;
+    parameter.Running_State = PAUSE;
+  } 
 }
 
 
@@ -1557,7 +1646,39 @@ void Nodes_Check(NFC_Select_t select){
   }
 
   else if(select == REAR_NFC){
+    for(int i=0; i<stack_size; i++){
+      if(NFC_R.tagPosX == invert_traceBack[i].x && NFC_R.tagPosY == invert_traceBack[i].y && nodes_checked[i].x != invert_traceBack[i].x && nodes_checked[i].y != invert_traceBack[i].y){
+        nodes_checked[i] = invert_traceBack[i];
 
+        if(NFC_R.tagType == NONE_SIGN){
+          if(path_step[i] == 'f')
+            turning_decision = NONE_TURN;
+
+          else if(path_step[i] == 'r')
+            turning_decision = TURN_RIGHT;
+
+          else if(path_step[i] == 'l')
+            turning_decision = TURN_LEFT;
+
+          else if(path_step[i] == 's')
+            turning_decision = TURN_STOP;
+        }
+        
+        else if(NFC_R.tagType == CROSSECTION_SIGN){
+          if(path_step[i] == 'f')
+            turning_decision = STRAIGHT;
+
+          else if(path_step[i] == 'r')
+            turning_decision = TURN_RIGHT;
+
+          else if(path_step[i] == 'l')
+            turning_decision = TURN_LEFT;
+
+          else if(path_step[i] == 's')
+            turning_decision = TURN_STOP;
+        }
+      }
+    }
   }
 }
 
@@ -1568,10 +1689,11 @@ void NFC_Handler(NFC_Select_t select){
     digitalWrite(VIR_VCC2, LOW);
 
     NFC_readTag(&NFC_F);
-    Nodes_Check(FRONT_NFC);
+    // Nodes_Check(FRONT_NFC);
     Turn_Check(FRONT_NFC);
-    Cross_Check(FRONT_NFC);
-    Destination_Handler();
+    // Cross_Check(FRONT_NFC);
+    // Destination_Handler();
+    Custom_Destination_Handler();
 
     if(NFC_F.tagType != NONE_SIGN){
       parameter.Tag_sign = NFC_F.tagType;
@@ -1592,10 +1714,11 @@ void NFC_Handler(NFC_Select_t select){
     digitalWrite(VIR_VCC2, HIGH);
 
     NFC_readTag(&NFC_R);
-    Nodes_Check(REAR_NFC);
+    // Nodes_Check(REAR_NFC);
     Turn_Check(REAR_NFC);
-    Cross_Check(REAR_NFC);
-    Destination_Handler();
+    // Cross_Check(REAR_NFC);
+    // Destination_Handler();
+    Custom_Destination_Handler();
 
     if(NFC_F.tagType != NONE_SIGN){
       parameter.Tag_sign = NFC_R.tagType;
