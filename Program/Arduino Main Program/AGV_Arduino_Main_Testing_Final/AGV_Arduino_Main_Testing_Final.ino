@@ -16,9 +16,9 @@
 // #define TEST_ENCODER
 // #define TEST_ODOMETRY
 // #define TEST_ODOMETRY_ROTASI
-#define TEST_LINE
+// #define TEST_LINE
 // #define TEST_SERIAL
-// #define TEST_MAIN
+#define TEST_MAIN
 
 /*User Private Include*/
 #include "Wire.h"
@@ -106,8 +106,8 @@ cellSize = 10;
 
 uint8_t
 line_false_interval = 150,
-regenerative_interval = 5,
-nfc_read_interval = 100;
+regenerative_interval = 10,
+nfc_read_interval = 50;
 
 uint8_t
 hook_state,
@@ -192,7 +192,8 @@ prev_tickB,       // -> Timer Regenerative
 prev_tickC,       // -> Timer Pembacaan NFC
 prev_tickD,       // -> Timer Validasi Reset NFC
 prev_tickE,       // -> Timer Validasi Pmebacaan NFC Turn Sign
-prev_tickF;       // -> Timer Validasi Pmebacaan NFC Cross Sign
+prev_tickF,       // -> Timer Validasi Pmebacaan NFC Cross Sign
+prev_tickG;
 
 bool
 arrived_at_destination = false,
@@ -397,17 +398,6 @@ void setup(){
   pinMode(CURRENT_SENS_PIN, INPUT);
   pinMode(VOLTAGE_SENS_PIN, INPUT);
 
-  #ifdef USE_OLD_PINOUT
-    digitalWrite(SIG_LR, HIGH);
-    delay(20);
-    digitalWrite(ENA_R, LOW);
-    digitalWrite(ENA_L, LOW);
-    delay(20);
-    analogWrite(PWM_R, 0);
-    analogWrite(PWM_L, 0);
-    delay(20);
-  #endif
-
   // Interface Pin Setup
   pinMode(START_BTN, INPUT_PULLUP);
   pinMode(SPEAKER_PIN, OUTPUT);
@@ -436,9 +426,9 @@ void setup(){
   parameter.Tag_sign = NONE_SIGN;
 
   // PID LF Setup
-  pid_agv_f.Kp        = 1.225; // pid_agv_f.Kp        = 0.825; 
-  pid_agv_f.Ki        = 0.0005;       
-  pid_agv_f.Kd        = 0.035; 		
+  pid_agv_f.Kp        = 0.825; // pid_agv_f.Kp        = 0.825; 
+  pid_agv_f.Ki        = 0.005;       
+  pid_agv_f.Kd        = 0.01; 		
   pid_agv_f.tau       = 0.01;
 	pid_agv_f.limMax    = 100;     
   pid_agv_f.limMin    = -100;     
@@ -447,9 +437,9 @@ void setup(){
 	pid_agv_f.T_sample  = 0.01;
   PIDController_Init(&pid_agv_f);
 
-  pid_agv_b.Kp        = 1.115;
-  pid_agv_b.Ki        = 0.001;       
-  pid_agv_b.Kd        = 0.035; 		
+  pid_agv_b.Kp        = 0.985;
+  pid_agv_b.Ki        = 0.005;       
+  pid_agv_b.Kd        = 0.025; 		
   pid_agv_b.tau       = 0.01;
 	pid_agv_b.limMax    = 100;     
   pid_agv_b.limMin    = -100;     
@@ -482,7 +472,7 @@ void setup(){
 	pid_gyro_corr.T_sample    = 0.01;
   PIDController_Init(&pid_gyro_corr);
 
-  // NFC_F.tagType = HOME_SIGN;
+  NFC_F.tagType = HOME_SIGN;
   parameter.Running_Mode = LF_MODE;
   // parameter.Running_Mode = LIDAR_MODE;
 
@@ -495,6 +485,9 @@ void setup(){
       L_Motor1.driver_Pinset(ENA_L, PWM_L, DIR_L, SIG_LR);
       R_Motor1.driver_Pinset(ENA_R, PWM_R, DIR_R, SIG_LR);
 
+      L_Motor1.driver_Enable();
+      R_Motor1.driver_Enable();
+
       // NFC Pin Setup
       pinMode(IRQ_NFC1, OUTPUT);
       pinMode(IRQ_NFC2, OUTPUT);
@@ -504,6 +497,7 @@ void setup(){
       digitalWrite(PILOTLAMP_PIN, HIGH);
       delay(500);
       digitalWrite(PILOTLAMP_PIN, LOW);
+      delay(500);
       break;
     }
 
@@ -518,21 +512,21 @@ void setup(){
       digitalWrite(PILOTLAMP_PIN, HIGH);
       delay(500);
       digitalWrite(PILOTLAMP_PIN, LOW);
+      delay(500);
       break;
     }
     else continue;
   }
 
-  while(1){
-    if(digitalRead(START_BTN) == LOW) break;
-    else continue;
-  }
+  // while(1){
+  //   if(digitalRead(START_BTN) == LOW) break;
+  //   else continue;
+  // }
 }
 
 void loop(){
-  digitalWrite(PILOTLAMP_PIN, HIGH);
-
   #ifdef TEST_PROXIMITY 
+    digitalWrite(PILOTLAMP_PIN, HIGH);
     front_state = Read_Proximity(FRONT);
     rear_state = Read_Proximity(REAR);
 
@@ -544,6 +538,7 @@ void loop(){
   #endif
 
   #ifdef TEST_BATTERY
+    digitalWrite(PILOTLAMP_PIN, HIGH);
     Check_Battery_Cappacity();
     Serial.print("Voltage: ");
     Serial.print(bat_voltage);
@@ -558,6 +553,7 @@ void loop(){
   #endif
 
   #ifdef TEST_NFC
+    digitalWrite(PILOTLAMP_PIN, HIGH);
     // digitalWrite(VIR_VCC1, LOW);
     // digitalWrite(VIR_VCC2, HIGH);
     // nfc.begin();
@@ -599,6 +595,7 @@ void loop(){
   #endif
 
   #ifdef TEST_PINHOOK
+    digitalWrite(PILOTLAMP_PIN, HIGH);
     Serial.print(digitalRead(LS1));
     Serial.print(" ");
     Serial.println(digitalRead(LS2));
@@ -610,6 +607,7 @@ void loop(){
   #endif
 
   #ifdef TEST_ENCODER
+    digitalWrite(PILOTLAMP_PIN, HIGH);
     Motor_Handler(LIDAR_MODE, FORWARD, NORMAL_ACCEL, NORMAL_BRAKE, 80);
 
     Serial.print(digitalRead(ENCR_A));
@@ -622,6 +620,7 @@ void loop(){
   #endif
 
   #ifdef TEST_ODOMETRY
+    digitalWrite(PILOTLAMP_PIN, HIGH);
     // GoTo(0, 1500, 150);
     Motor_Handler(LIDAR_MODE, FORWARD, NORMAL_ACCEL, REGENERATIVE_BRAKE, 50);
 
@@ -638,33 +637,22 @@ void loop(){
   #endif
 
   #ifdef TEST_ODOMETRY_ROTASI
-  digitalWrite(SPEAKER_PIN, HIGH);
-  Change_Heading(0, 90, 12);
-  eul_value = bno.getEul();
-  Serial.print(" head: "); Serial.print(eul_value.head); Serial.print(" roll: "); Serial.print(eul_value.roll);  Serial.print(" pitch: "); Serial.println(eul_value.pitch);
+    digitalWrite(PILOTLAMP_PIN, HIGH);
+    Change_Heading(0, 90, 12);
+    eul_value = bno.getEul();
+    Serial.print(" head: "); Serial.print(eul_value.head); Serial.print(" roll: "); Serial.print(eul_value.roll);  Serial.print(" pitch: "); Serial.println(eul_value.pitch);
   #endif
 
   #ifdef TEST_LINE
-    // L_Motor1.motor_Run();
-    // R_Motor1.motor_Run();
-
-    // L_Motor1.driver_Enable();
-    // R_Motor1.driver_Enable();
-
-    // L_Motor1.set_Dir(CCW);
-    // R_Motor1.set_Dir(CW);
-
-    // L_Motor1.set_Speed(80);
-    // R_Motor1.set_Speed(80);
-
-    Motor_Handler(LF_MODE, FORWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
-    delay(2000);
-    Motor_Handler(LF_MODE, BRAKE, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
-    delay(2000);
-    Motor_Handler(LF_MODE, BACKWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
-    delay(2000);
-    Motor_Handler(LF_MODE, BRAKE, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
-    delay(2000);
+    digitalWrite(PILOTLAMP_PIN, HIGH);
+    // Motor_Handler(LF_MODE, FORWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
+    // delay(2000);
+    // Motor_Handler(LF_MODE, BRAKE, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
+    // delay(2000);
+    // Motor_Handler(LF_MODE, BACKWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
+    // delay(2000);
+    // Motor_Handler(LF_MODE, BRAKE, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
+    // delay(2000);
 
     // Read_Sens(REAR);
     // Serial.print("Sens Data: 0b");
@@ -673,6 +661,8 @@ void loop(){
     // }
     // Serial.println(" ");
     // delay(500);
+
+    Motor_Handler(LF_MODE, BACKWARD, NORMAL_ACCEL, REGENERATIVE_BRAKE, 80);
   #endif
 
   #ifdef TEST_SERIAL
@@ -723,12 +713,15 @@ void loop(){
 
   #ifdef TEST_MAIN
     if(!config_done){
-      Receive_Serial(&parameter);
+      // Receive_Serial(&parameter);
       btn_pressed = !digitalRead(START_BTN);
 
       if(parameter.Running_Mode == LF_MODE){
         Read_Sens(FRONT);
-        NFC_readTag(&NFC_F);
+        // if(millis() - prev_tickC > nfc_read_interval){
+        //   NFC_Handler(FRONT_NFC);
+        //   prev_tickC = millis();
+        // }
 
         // Check if there is no line and home tag detected
         if(!line_detected && NFC_F.tagType != HOME_SIGN){
@@ -739,8 +732,8 @@ void loop(){
           }
         }
 
-        // Check if line is detected but home tag is not
-        else if(line_detected && NFC_F.tagType != HOME_SIGN){
+        // Check if line or home tag is detected
+        else if((line_detected && NFC_F.tagType != HOME_SIGN) || (!line_detected && NFC_F.tagType == HOME_SIGN)){
           if(millis() - prev_dummytick1 > 500){
             if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
             else digitalWrite(PILOTLAMP_PIN, LOW);
@@ -762,7 +755,10 @@ void loop(){
 
           else if(btn_pressed){
             parameter.Running_State = START;
-            parameter.Running_Dir = FORWARD;
+            parameter.Running_Dir = BACKWARD;
+            parameter.Goal_coordinateX = 7;
+            parameter.Goal_coordinateY = 7;
+            parameter.Base_Speed = 80;
             
             digitalWrite(PILOTLAMP_PIN, LOW);
             delay(1000);
@@ -805,7 +801,7 @@ void loop(){
       switch(parameter.Running_State){
         case START:
         parameter.Current_Pos = ON_THE_WAY;
-        Transmit_Serial(&parameter);
+        // Transmit_Serial(&parameter);
 
         digitalWrite(PILOTLAMP_PIN, HIGH);
         Run_AGV(parameter.Running_Mode);
@@ -971,10 +967,6 @@ void Line_Check(uint8_t mode){
     case 1:
     if(no_line){
       Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
-      parameter.Running_State = PAUSE;
-      line_false_cnt = 0;
-      no_line = false;
-      config_done = false;
     }
     break;
   }
@@ -1196,8 +1188,8 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     switch(accel){
       case NORMAL_ACCEL:
       if(mode == LF_MODE){
-        L_speed = speed - lf_pid_val - decrease_speedL;
-        R_speed = speed + lf_pid_val - decrease_speedR;
+        L_speed = speed + lf_pid_val - decrease_speedL;
+        R_speed = speed - lf_pid_val - decrease_speedR;
 
         L_Motor1.set_Speed(L_speed);
         R_Motor1.set_Speed(R_speed);
@@ -1223,8 +1215,8 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
         speed_cnt++;
         
         if(mode == LF_MODE){
-          L_speed = speed_cnt - lf_pid_val - decrease_speedL;
-          R_speed = speed_cnt + lf_pid_val - decrease_speedR;
+          L_speed = speed_cnt + lf_pid_val - decrease_speedL;
+          R_speed = speed_cnt - lf_pid_val - decrease_speedR;
 
           L_Motor1.set_Speed(L_speed);
           R_Motor1.set_Speed(R_speed);
@@ -1244,8 +1236,8 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
 
       if(running){
         if(mode == LF_MODE){
-          L_speed = speed - lf_pid_val - decrease_speedL;
-          R_speed = speed + lf_pid_val - decrease_speedR;
+          L_speed = speed + lf_pid_val - decrease_speedL;
+          R_speed = speed - lf_pid_val - decrease_speedR;
 
           L_Motor1.set_Speed(L_speed);
           R_Motor1.set_Speed(R_speed);
@@ -1399,7 +1391,6 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
             L_Motor2.set_Speed(i);
             R_Motor2.set_Speed(i);
           }
-          Serial.println(i);
           delay(regenerative_interval);
         }
 
@@ -1516,7 +1507,7 @@ void Destination_Handler(void){
 
 // Custom Destination Handler Without Path Planning
 void Custom_Destination_Handler(void){
-  if(parameter.Current_coordinateX != parameter.Goal_coordinateX || parameter.Current_coordinateX != parameter.Goal_coordinateY){
+  if(parameter.Current_coordinateX == parameter.Goal_coordinateX || parameter.Current_coordinateY == parameter.Goal_coordinateY){
     parameter.Current_Pos = ON_STATION;
     parameter.CurrentPos_Value = parameter.Tag_value;
     Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
@@ -1532,7 +1523,6 @@ void Custom_Destination_Handler(void){
   } 
 }
 
-
 // Station Package Sync Algorithm
 bool Station_Handler(void){
   rear_state = Read_Proximity(REAR);
@@ -1546,31 +1536,62 @@ void Turn_Check(NFC_Select_t select){
   if(select == FRONT_NFC){
     // DETEKSI AWAL BELOKAN
     if(parameter.Tag_sign != TURN_SIGN && NFC_F.tagType == TURN_SIGN){
-      decrease_speedL = NFC_F.tagTypeValue;
-      decrease_speedR = NFC_F.tagTypeValue;
+      decrease_speedL = NFC_F.tagTypeValue - 10;
+      decrease_speedR = NFC_F.tagTypeValue - 10;
+      prev_tickE = millis();
     }
     
     // DETEKSI AKHIR BELOKAN
-    else if(parameter.Tag_sign == TURN_SIGN && NFC_F.tagType == TURN_SIGN){
-      if(millis() - prev_tickE > 10 && decrease_speedR != 0 && decrease_speedL != 0){
-        turn_timer_cnt++;
+    // else if(parameter.Tag_sign == TURN_SIGN && NFC_F.tagType == TURN_SIGN){
+    //   if(millis() - prev_tickE > 10 && decrease_speedR != 0 && decrease_speedL != 0){
+    //     turn_timer_cnt++;
+    //     if(turn_timer_cnt == 2){
+    //       decrease_speedL = 0;
+    //       decrease_speedR = 0;
+    //       turn_timer_cnt = 0;
+    //     }
+    //     prev_tickE = millis();
+    //   }
+    // }
 
-        if(turn_timer_cnt == 2){
-          turn_timer_cnt = 0;
-          decrease_speedL = 0;
-          decrease_speedR = 0;
-        }
-
-        prev_tickE = millis();
-      }
+    // DETEKSI AKHIR BELOKAN
+    else if(millis() - prev_tickE >= 2000 && millis() - prev_tickE < 5000 && NFC_F.tagType == TURN_SIGN){
+      decrease_speedL = 0;
+      decrease_speedR = 0;
+      turn_timer_cnt = 0;
+      parameter.Tag_sign = NONE_SIGN;
     }
 
     // BELOKAN TIDAK TERDETEKSI
-    else if(NFC_F.tagType != TURN_SIGN) turn_timer_cnt = 0;
+    // if(millis() - prev_tickG < 5000 && NFC_F.tagType != TURN_SIGN){
+    //   turn_timer_cnt = 0;
+    // }
 
     if(millis() - prev_tickD > 1000 && NFC_F.tagType == NONE_SIGN && decrease_speedR == 0 && decrease_speedL == 0){
       parameter.Tag_sign = NONE_SIGN;
       prev_tickD = millis();
+    }
+  }
+
+  else if(select == REAR_NFC){
+    // DETEKSI AWAL BELOKAN
+    if(parameter.Tag_sign != TURN_SIGN && NFC_R.tagType == TURN_SIGN){
+      decrease_speedL = NFC_R.tagTypeValue - 10;
+      decrease_speedR = NFC_R.tagTypeValue - 10;
+      prev_tickD = millis();
+    }
+
+    // DETEKSI AKHIR BELOKAN
+    else if(millis() - prev_tickD >= 2000 && millis() - prev_tickD < 5000 && NFC_R.tagType == TURN_SIGN){
+      decrease_speedL = 0;
+      decrease_speedR = 0;
+      turn_timer_cnt = 0;
+      parameter.Tag_sign = NONE_SIGN;
+    }
+
+    if(millis() - prev_tickE > 1000 && NFC_R.tagType == NONE_SIGN && decrease_speedR == 0 && decrease_speedL == 0){
+      parameter.Tag_sign = NONE_SIGN;
+      prev_tickE = millis();
     }
   }
 }
@@ -1736,7 +1757,7 @@ void NFC_Handler(NFC_Select_t select){
     // Cross_Check(FRONT_NFC);
     // Destination_Handler();
     Custom_Destination_Handler(); 
-
+    
     if(NFC_F.tagType != NONE_SIGN){
       parameter.Tag_sign = NFC_F.tagType;
       parameter.Tag_value = NFC_F.tagTypeValue;

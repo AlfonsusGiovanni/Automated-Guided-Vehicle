@@ -161,8 +161,8 @@ void setup() {
     prev_btn_read[i] = digitalRead(btn_pin[i]);
   }
 
-  digitalWrite(VIR_VCC1, LOW);
-  digitalWrite(VIR_VCC2, HIGH);
+  digitalWrite(VIR_VCC1, HIGH);
+  digitalWrite(VIR_VCC2, LOW);
 
   nfc.begin();
   uint32_t versiondata = nfc.getFirmwareVersion();
@@ -195,9 +195,9 @@ void loop() {
   for (int i = 0; i < 15; i++) {
     nfc.begin();
     nfc.SAMConfig();
-    digitalWrite(VIR_VCC1, LOW);
-    digitalWrite(VIR_VCC2, HIGH);
-    if(NFC_writeTag(&NFC_Tag, STATION_SIGN, 0, 0, 7, 7) == SUCCESS){
+    digitalWrite(VIR_VCC1, HIGH);
+    digitalWrite(VIR_VCC2, LOW);
+    if(NFC_writeTag(&NFC_Tag, TURN_SIGN, 40, 0, 0, 0) == SUCCESS){
       Serial.println("Write Success...");
       delay(2000);
       break;
@@ -207,8 +207,8 @@ void loop() {
   for (int i = 0; i < 100; i++) {
     nfc.begin();
     nfc.SAMConfig();
-    digitalWrite(VIR_VCC1, LOW);
-    digitalWrite(VIR_VCC2, HIGH);
+    digitalWrite(VIR_VCC1, HIGH);
+    digitalWrite(VIR_VCC2, LOW);
     Check_TagData();
   }
   
