@@ -27,52 +27,64 @@ void Motor_Driver::driver_Pinset(const uint8_t enaPin, const uint8_t pwmPin, con
 }
 
 void Motor_Driver::driver_Enable(){
-  if(Motor_Driver::active_mode == ACTIVE_LOW)
+  if(Motor_Driver::active_mode == ACTIVE_LOW){
     digitalWrite(Motor_Driver::ena_Pin, LOW);
+  }
 
-  else if(Motor_Driver::active_mode == ACTIVE_HIGH)
+  else if(Motor_Driver::active_mode == ACTIVE_HIGH){
     digitalWrite(Motor_Driver::ena_Pin, HIGH);
+  }
 }
 
 void Motor_Driver::driver_Disable(){
-  if(Motor_Driver::active_mode == ACTIVE_LOW)
+  if(Motor_Driver::active_mode == ACTIVE_LOW){
     digitalWrite(Motor_Driver::ena_Pin, HIGH);
+  }
 
-  else if(Motor_Driver::active_mode == ACTIVE_HIGH)
+  else if(Motor_Driver::active_mode == ACTIVE_HIGH){
     digitalWrite(Motor_Driver::ena_Pin, LOW);
+  }
 }
 
 void Motor_Driver::motor_Run(){
-  if(Motor_Driver::active_mode == ACTIVE_LOW)
+  if(Motor_Driver::active_mode == ACTIVE_LOW){
     digitalWrite(Motor_Driver::sig_Pin, LOW);
+  }
 
-  else if(Motor_Driver::active_mode == ACTIVE_HIGH)
+  else if(Motor_Driver::active_mode == ACTIVE_HIGH){
     digitalWrite(Motor_Driver::sig_Pin, HIGH);
+  }
 }
 
 void Motor_Driver::motor_Stop(){
-  if(Motor_Driver::active_mode == ACTIVE_LOW)
+  if(Motor_Driver::active_mode == ACTIVE_LOW){
     digitalWrite(Motor_Driver::sig_Pin, HIGH);
+  }
 
-  else if(Motor_Driver::active_mode == ACTIVE_HIGH)
+  else if(Motor_Driver::active_mode == ACTIVE_HIGH){
     digitalWrite(Motor_Driver::sig_Pin, LOW);
+  }
 }
 
 void Motor_Driver::set_Dir(motor_dir input_dir){
   if(Motor_Driver::active_mode == ACTIVE_LOW){
-    if(input_dir == CW)
+    if(input_dir == CW){
       digitalWrite(Motor_Driver::dir_Pin, LOW);
+    }
     
-    else if(input_dir == CCW)
+    else if(input_dir == CCW){
       digitalWrite(Motor_Driver::dir_Pin, HIGH);
+    }
   }
 
   else if(Motor_Driver::active_mode == ACTIVE_HIGH){
-    if(input_dir == CW)
+    if(input_dir == CW){
       digitalWrite(Motor_Driver::dir_Pin, HIGH);
+    }
     
-    else if(input_dir == CCW)
+    else if(input_dir == CCW){
       digitalWrite(Motor_Driver::dir_Pin, LOW);
+    }
   }
 }
 

@@ -145,7 +145,7 @@ void Check_TagData(void);
 
 /*VOID SETUP*/
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(1000000);
 
   pinMode(VIR_VCC1, OUTPUT);
   pinMode(VIR_VCC2, OUTPUT);
@@ -161,8 +161,8 @@ void setup() {
     prev_btn_read[i] = digitalRead(btn_pin[i]);
   }
 
-  digitalWrite(VIR_VCC1, HIGH);
-  digitalWrite(VIR_VCC2, LOW);
+  digitalWrite(VIR_VCC1, LOW);
+  digitalWrite(VIR_VCC2, HIGH);
 
   nfc.begin();
   uint32_t versiondata = nfc.getFirmwareVersion();
@@ -191,14 +191,13 @@ void setup() {
 
 // VOID LOOP
 void loop() {
-  /*
   Serial.print("Writing...");
   for (int i = 0; i < 15; i++) {
     nfc.begin();
     nfc.SAMConfig();
-    digitalWrite(VIR_VCC1, HIGH);
-    digitalWrite(VIR_VCC2, LOW);
-    if (NFC_writeTag(&NFC_Tag, NONE_SIGN, 0, 0, 2, 1) == SUCCESS){
+    digitalWrite(VIR_VCC1, LOW);
+    digitalWrite(VIR_VCC2, HIGH);
+    if(NFC_writeTag(&NFC_Tag, STATION_SIGN, 0, 0, 7, 7) == SUCCESS){
       Serial.println("Write Success...");
       delay(2000);
       break;
@@ -212,10 +211,9 @@ void loop() {
     digitalWrite(VIR_VCC2, HIGH);
     Check_TagData();
   }
-  */
   
-  UI_Handler();
-  Show_Menu(select_menu);
+  // UI_Handler();
+  // Show_Menu(select_menu);
 }
 
 // BUTTON CHECK FUNCTION

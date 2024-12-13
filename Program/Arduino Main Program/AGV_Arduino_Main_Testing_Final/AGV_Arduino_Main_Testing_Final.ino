@@ -9,16 +9,16 @@
 #define USE_NEW_PINOUT
 //#define USE_OLD_PINOUT
 
-//#define TEST_PROXIMITY
-//#define TEST_BATTERY
-//#define TEST_NFC
-//#define TEST_PINHOOK
-#define TEST_ENCODER
-//#define TEST_ODOMETRY
-//#define TEST_ODOMETRY_ROTASI
-//#define TEST_LINE
-//#define TEST_SERIAL
-//#define TEST_MAIN
+// #define TEST_PROXIMITY
+// #define TEST_BATTERY
+// #define TEST_NFC
+// #define TEST_PINHOOK
+// #define TEST_ENCODER
+// #define TEST_ODOMETRY
+// #define TEST_ODOMETRY_ROTASI
+#define TEST_LINE
+// #define TEST_SERIAL
+// #define TEST_MAIN
 
 /*User Private Include*/
 #include "Wire.h"
@@ -94,7 +94,7 @@
 
 /*User Private Variable*/
 const uint8_t
-sens_pin[SENS_NUM] = {53, 51, 49, 47, 45, 43, 41, 39, 37, 35, 33, 31, 29, 27, 25, 23};
+sens_pin[SENS_NUM] = {22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37};
 
 const int32_t
 sens_weight[SENS_NUM] = {0, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5, 42.5, 47.5, 52.5, 57.5, 62.5, 67.5, 72.5, 80};
@@ -334,6 +334,7 @@ BNO::sEulAnalog_t eul_value;
 
 /*User Private Class Init*/
 Adafruit_PN532 nfc(IRQ_NFC1, 3);
+Adafruit_PN532 nfc2(IRQ_NFC2, 3);
 Odometry odometry(150, 413, 60);
 BNO bno(&Wire, 0x28);
 Motor_Driver L_Motor1(80, 100, ACTIVE_LOW);   // LF LEFT MOTOR
@@ -417,6 +418,7 @@ void setup(){
     pinMode(SERVO_HOOK, OUTPUT);
     pinMode(LS1, INPUT_PULLUP);
     pinMode(LS2, INPUT_PULLUP);
+    digitalWrite(SERVO_HOOK, LOW);
   #endif
 
   pinMode(SENS_SWITCH, OUTPUT);
@@ -481,8 +483,8 @@ void setup(){
   PIDController_Init(&pid_gyro_corr);
 
   // NFC_F.tagType = HOME_SIGN;
-  // parameter.Running_Mode = LF_MODE;
-  parameter.Running_Mode = LIDAR_MODE;
+  parameter.Running_Mode = LF_MODE;
+  // parameter.Running_Mode = LIDAR_MODE;
 
   while(1){
     digitalWrite(PILOTLAMP_PIN, LOW);
@@ -499,10 +501,6 @@ void setup(){
       pinMode(VIR_VCC1, OUTPUT);
       pinMode(VIR_VCC2, OUTPUT);
 
-      // NFC Setup
-      nfc.begin();
-      nfc.SAMConfig();
-
       digitalWrite(PILOTLAMP_PIN, HIGH);
       delay(500);
       digitalWrite(PILOTLAMP_PIN, LOW);
@@ -517,16 +515,6 @@ void setup(){
       // Encoder Pin Setup
       odometry.enc_Pinset(ENCL_A, ENCL_B, ENCL_C, ENCR_A, ENCR_B, ENCR_C);
 
-      // BNO Setup
-      /*
-      bno.reset();
-      while(bno.begin() != BNO::eStatusOK) {
-        Serial.println("bno begin faild");
-        delay(1000);
-      }
-      Serial.println("bno begin success");
-      */
-
       digitalWrite(PILOTLAMP_PIN, HIGH);
       delay(500);
       digitalWrite(PILOTLAMP_PIN, LOW);
@@ -536,7 +524,6 @@ void setup(){
   }
 
   while(1){
-    Serial.println(digitalRead(START_BTN));
     if(digitalRead(START_BTN) == LOW) break;
     else continue;
   }
@@ -571,17 +558,44 @@ void loop(){
   #endif
 
   #ifdef TEST_NFC
-    NFC_Handler(FRONT_NFC);
+    // digitalWrite(VIR_VCC1, LOW);
+    // digitalWrite(VIR_VCC2, HIGH);
+    // nfc.begin();
+    // nfc.SAMConfig();
+    // NFC_readData(&NFC_R);
 
-    Serial.print("NFC Data: ");
-    for(int i=0; i<16; i++){
-      Serial.print("0x");
-      Serial.print(NFC_F.stored_data[i], HEX);
-      if(i<15) Serial.print("-");
-    }
-    Serial.println(" ");
+    // Serial.print("NFC Data: ");
+    // for(int i=0; i<16; i++){
+    //   Serial.print("0x");
+    //   Serial.print(NFC_R.stored_data[i], HEX);
+    //   if(i<15) Serial.print("-");
+    // }
+    // Serial.println(" ");
 
-    delay(250);
+    // delay(500);
+
+    // for (byte address = 1; address < 128; address++) {
+    //   Wire.beginTransmission(address);
+    //   if(Wire.endTransmission() == 0) {
+    //     Serial.print("I2C device found at address 0x");
+    //     Serial.println(address, HEX);
+    //     delay(2000);
+    //     break;
+    //   }
+
+    //   else{
+    //     Serial.print("Try: ");
+    //     Serial.print("0x");
+    //     Serial.println(address, HEX);
+    //     delay(100);
+    //   }
+
+    //   if(address == 127){
+    //     Serial.println("I2C device not found at any address");
+    //     delay(2000);
+    //     break;
+    //   }
+    // }
   #endif
 
   #ifdef TEST_PINHOOK
@@ -631,10 +645,34 @@ void loop(){
   #endif
 
   #ifdef TEST_LINE
-    Motor_Handler(LF_MODE, BACKWARD, NORMAL_ACCEL, REGENERATIVE_BRAKE, 80);
+    // L_Motor1.motor_Run();
+    // R_Motor1.motor_Run();
+
+    // L_Motor1.driver_Enable();
+    // R_Motor1.driver_Enable();
+
+    // L_Motor1.set_Dir(CCW);
+    // R_Motor1.set_Dir(CW);
+
+    // L_Motor1.set_Speed(80);
+    // R_Motor1.set_Speed(80);
+
+    Motor_Handler(LF_MODE, FORWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
     delay(2000);
-    Motor_Handler(LF_MODE, BRAKE, NORMAL_ACCEL, NORMAL_BRAKE, 80);
-    delay(5000);
+    Motor_Handler(LF_MODE, BRAKE, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
+    delay(2000);
+    Motor_Handler(LF_MODE, BACKWARD, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
+    delay(2000);
+    Motor_Handler(LF_MODE, BRAKE, REGENERATIVE_ACCEL, REGENERATIVE_BRAKE, 80);
+    delay(2000);
+
+    // Read_Sens(REAR);
+    // Serial.print("Sens Data: 0b");
+    // for(int i=SENS_NUM-1; i>=0; i--){
+    //   Serial.print(bitRead(sens_data, i));
+    // }
+    // Serial.println(" ");
+    // delay(500);
   #endif
 
   #ifdef TEST_SERIAL
@@ -788,6 +826,8 @@ void loop(){
           Receive_Serial(&parameter);
           prev_tickComrx = millis();
         }
+
+        Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
         break;
       }
     }
@@ -1028,7 +1068,7 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
 
   switch(direction){
     case FORWARD:
-    running = false;
+    running = true;
     
     if(mode == LF_MODE){
       L_Motor1.motor_Run();
@@ -1062,7 +1102,7 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
       }
 
       else if(mode == LIDAR_MODE){
-        if(independent_inputspeed){
+        if(!independent_inputspeed){
           L_speed = speed  - balancer_pid_val;
           R_speed = speed  + balancer_pid_val;
         }
@@ -1110,7 +1150,7 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
         }
 
         else if(mode == LIDAR_MODE){
-          if(independent_inputspeed){
+          if(!independent_inputspeed){
             L_speed = speed  - balancer_pid_val;
             R_speed = speed  + balancer_pid_val;
           }
@@ -1164,7 +1204,7 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
       }
 
       else if(mode == LIDAR_MODE){
-        if(independent_inputspeed){
+        if(!independent_inputspeed){
           L_speed = speed  + balancer_pid_val;
           R_speed = speed  - balancer_pid_val;
         }
@@ -1687,13 +1727,15 @@ void NFC_Handler(NFC_Select_t select){
   if(select == FRONT_NFC){
     digitalWrite(VIR_VCC1, HIGH);
     digitalWrite(VIR_VCC2, LOW);
+    nfc.begin();
+    nfc.SAMConfig();
 
     NFC_readTag(&NFC_F);
     // Nodes_Check(FRONT_NFC);
     Turn_Check(FRONT_NFC);
     // Cross_Check(FRONT_NFC);
     // Destination_Handler();
-    Custom_Destination_Handler();
+    Custom_Destination_Handler(); 
 
     if(NFC_F.tagType != NONE_SIGN){
       parameter.Tag_sign = NFC_F.tagType;
@@ -1712,6 +1754,8 @@ void NFC_Handler(NFC_Select_t select){
   else if(select == REAR_NFC){
     digitalWrite(VIR_VCC1, LOW);
     digitalWrite(VIR_VCC2, HIGH);
+    nfc.begin();
+    nfc.SAMConfig();
 
     NFC_readTag(&NFC_R);
     // Nodes_Check(REAR_NFC);
