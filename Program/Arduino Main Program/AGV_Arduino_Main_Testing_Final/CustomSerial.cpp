@@ -2,7 +2,7 @@
   SERIAL COMMUNICATION LIBRARY V2
   PT. Stechoq Robotika Indonesia
   
-  Date    : 25 OKTOBER 2024
+  Date    : 25 Oktober 2024
   Author  : Alfonsus Giovanni Mahendra Putra - Universitas Diponegoro
 */
 

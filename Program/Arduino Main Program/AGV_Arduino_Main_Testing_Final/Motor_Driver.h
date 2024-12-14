@@ -2,7 +2,7 @@
   AGV MOTOR DRIVER LIBRARY
   PT. Stechoq Robotika Indonesia
   
-  Date    : 11 NOVEMBER 2024
+  Date    : 11 November 2024
   Author  : Alfonsus Giovanni Mahendra Putra - Universitas Diponegoro
 */
 

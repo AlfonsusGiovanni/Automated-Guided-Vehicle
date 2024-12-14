@@ -178,8 +178,10 @@ class Serial_COM:
             self.Goal_coordinateX,
             self.Goal_coordinateY,
 
-            self.joystick_X,
-            self.joystick_Y,
+            (self.joystick_X >> 8) & 0xFF,
+            self.joystick_X & 0xFF,
+            (self.joystick_Y >> 8) & 0xFF,
+            self.joystick_Y & 0xFF,
 
             self.Left_speed,
             self.Right_speed,
