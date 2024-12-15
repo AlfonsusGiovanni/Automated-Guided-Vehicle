@@ -173,10 +173,15 @@ class Serial_COM:
             self.Running_Accel,
             self.Running_Brake,
 
-            self.Start_coordinateX,
-            self.Start_coordinateY,
-            self.Goal_coordinateX,
-            self.Goal_coordinateY,
+            (self.Start_coordinateX >> 8) & 0xFF,
+            self.Start_coordinateX & 0xFF,
+            (self.Start_coordinateY >> 8) & 0xFF,
+            self.Start_coordinateY & 0xFF,
+
+            (self.Goal_coordinateX >> 8) & 0xFF,
+            self.Goal_coordinateX & 0xFF,
+            (self.Goal_coordinateY >> 8) & 0xFF,
+            self.Goal_coordinateY & 0xFF,
 
             (self.joystick_X >> 8) & 0xFF,
             self.joystick_X & 0xFF,
@@ -191,9 +196,9 @@ class Serial_COM:
         self.data.write(tx_buff)
 
     def Receive_Data(self):
-        rx_buff = self.data.read(29)
+        rx_buff = self.data.read(32)
 
-        if len(rx_buff) == 29 and rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[28] == self.Tail:
+        if len(rx_buff) == 32 and rx_buff[0] == self.Header and rx_buff[1] == self.Header and rx_buff[31] == self.Tail:
             self.Running_Mode = rx_buff[2]
             self.Running_State = rx_buff[3]
             self.Current_Pos = rx_buff[4]
@@ -201,16 +206,16 @@ class Serial_COM:
             self.Tag_sign = rx_buff[7]
             self.Tag_value = rx_buff[8] << 8 | rx_buff[9]
             self.Tag_num = rx_buff[10] << 8 | rx_buff[11]
-            self.Current_coordinateX = rx_buff[12]
-            self.Current_coordinateY = rx_buff[13]
-            self.Left_Counter = rx_buff[14] << 8 | rx_buff[15]
-            self.Right_Counter = rx_buff[16] << 8 | rx_buff[17]
-            self.SensorA_Status = rx_buff[18]
-            self.SensorB_Status = rx_buff[19]
-            self.Send_Counter = rx_buff[20] << 8 | rx_buff[21]
-            self.Pickup_Counter = rx_buff[22] << 8 | rx_buff[23]
+            self.Current_coordinateX = rx_buff[12] << 8 | rx_buff[13]
+            self.Current_coordinateY = rx_buff[14] << 8 | rx_buff[15]
+            self.Left_Counter = rx_buff[16] << 8 | rx_buff[17]
+            self.Right_Counter = rx_buff[18] << 8 | rx_buff[19]
+            self.SensorA_Status = rx_buff[20]
+            self.SensorB_Status = rx_buff[21]
+            self.Send_Counter = rx_buff[22] << 8 | rx_buff[23]
+            self.Pickup_Counter = rx_buff[24] << 8 | rx_buff[25]
 
-            voltage_array = arr.array('B', [rx_buff[24], rx_buff[25], rx_buff[26], rx_buff[27]])
+            voltage_array = arr.array('B', [rx_buff[26], rx_buff[27], rx_buff[28], rx_buff[29]])
             voltage_data = bytes(voltage_array)
             self.Battery_Level = struct.unpack('f', voltage_data)[0]
 

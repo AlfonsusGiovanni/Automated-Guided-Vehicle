@@ -677,18 +677,28 @@ void loop(){
 
   #ifdef TEST_SERIAL
     if(!config_done){
-      digitalWrite(LED_BUILTIN, LOW);
       Receive_Serial(&parameter);
 
       if(parameter.Running_Mode != NOT_SET && parameter.Running_State == START){
         prev_dummytick1 = millis();
         config_done = true;
       }
+      else digitalWrite(LED_BUILTIN, LOW);
     }
 
     else if(config_done){
       digitalWrite(LED_BUILTIN, HIGH);
 
+      parameter.Current_Pos = ON_THE_WAY;
+      parameter.Current_Pos = 1;
+      parameter.CurrentPos_Value = 1000;
+      parameter.Tag_sign = 1;
+      parameter.Tag_value = 500;
+      parameter.Tag_num = 425;
+
+      parameter.Current_coordinateX = 8;
+      parameter.Current_coordinateX = 8;
+      
       parameter.Current_Pos = ON_THE_WAY;
       parameter.Send_counter = 10;
       parameter.Pickup_counter = 11;
@@ -696,29 +706,12 @@ void loop(){
 
       Transmit_Serial(&parameter);
 
-      if(millis() - prev_dummytick1 > 5000){
-        parameter.Running_Mode = NOT_SET;
-        parameter.Running_State = STOP;
-        config_done = false;
-      }
+      // if(millis() - prev_dummytick1 > 5000){
+      //   parameter.Running_Mode = NOT_SET;
+      //   parameter.Running_State = STOP;
+      //   config_done = false;
+      // }
     }
-
-    parameter.Current_Pos = 1;
-    parameter.CurrentPos_Value = 1000;
-    parameter.Tag_sign = 1;
-    parameter.Tag_value = 500;
-    parameter.Tag_num = 425;
-
-    parameter.Current_coordinateX = 8;
-    parameter.Current_coordinateX = 8;
-    
-    parameter.Current_Pos = ON_THE_WAY;
-    parameter.Send_counter = 10;
-    parameter.Pickup_counter = 11;
-    parameter.Battery_level = 90.5;
-    Transmit_Serial(&parameter);
-
-    delay(500);
   #endif
 
   #ifdef TEST_MAIN

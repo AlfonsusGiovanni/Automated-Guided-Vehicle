@@ -87,8 +87,9 @@ Receiver_Thread = threading.Thread(target=AGV1.Receiver_Handler)
 # Initialize Communication
 AGV1.System_Set(Serial.UART_COM.running_mode.LF_MODE, 80, Serial.UART_COM.accel_mode.REGENERATIVE_ACCEL, Serial.UART_COM.brake_mode.REGENERATIVE_BRAKE)
 for i in range(0, 100):
-    Serial.UART_COM.Start_Pos = Serial.UART_COM.station_type.HOME_STATION
-    Serial.UART_COM.Destination = Serial.UART_COM.station_type.STATION_A
+    Serial.UART_COM.Start_coordinateY = 0
+    Serial.UART_COM.Goal_coordinateY = 1500
+    Serial.UART_COM.Running_Mode = Serial.UART_COM.running_mode.LIDAR_MODE
     Serial.UART_COM.Running_State = Serial.UART_COM.running_state.START
     Serial.UART_COM.Transmit_Data()
 print("Init Done")
@@ -103,9 +104,8 @@ Transmitter_Thread.start()
 Receiver_Thread.start()
 
 while True:
-    print("Run Start")
-    Serial.UART_COM.Running_Mode = Serial.UART_COM.running_mode.LF_MODE
-    Serial.UART_COM.Running_Dir = Serial.UART_COM.running_dir.FORWARD
+    # print("Run Start")
+    # Serial.UART_COM.Running_State = Serial.UART_COM.running_state.START
     # print([hex(i) for i in Serial.UART_COM.return_data])
 
     print("AGV Running Mode: ", Serial.UART_COM.Running_Mode)
@@ -115,9 +115,6 @@ while True:
     print("AGV Send Counter: ", Serial.UART_COM.Send_Counter)
     print("AGV Pickup Counter: ", Serial.UART_COM.Pickup_Counter)
     print("AGV Battery Level: ", Serial.UART_COM.Battery_Level)
-
-    # print("Running State: ", Serial.UART_COM.Select_state)
-
     # print("Sign Type: ", Serial.UART_COM.Tag_sign)
     # print("Sign Value: ", Serial.UART_COM.Tag_value)
     # print("Sign Num: ", Serial.UART_COM.Tag_num)
