@@ -2,7 +2,7 @@
   AGV MOTOR DRIVER LIBRARY
   PT. Stechoq Robotika Indonesia
   
-  Date    : 11 November 2024
+  Date    : 11 November 2024uint8_t
   Author  : Alfonsus Giovanni Mahendra Putra - Universitas Diponegoro
 */
 
@@ -26,27 +26,27 @@ void Motor_Driver::driver_Pinset(const uint8_t enaPin, const uint8_t pwmPin, con
   pinMode(sigPin, OUTPUT);
 }
 
-void Motor_Driver::driver_Enable(){
-  if(Motor_Driver::active_mode == ACTIVE_LOW){
-    digitalWrite(Motor_Driver::ena_Pin, LOW);
-  }
-
-  else if(Motor_Driver::active_mode == ACTIVE_HIGH){
-    digitalWrite(Motor_Driver::ena_Pin, HIGH);
-  }
-}
-
-void Motor_Driver::driver_Disable(){
-  if(Motor_Driver::active_mode == ACTIVE_LOW){
-    digitalWrite(Motor_Driver::ena_Pin, HIGH);
-  }
-
-  else if(Motor_Driver::active_mode == ACTIVE_HIGH){
-    digitalWrite(Motor_Driver::ena_Pin, LOW);
-  }
-}
-
 void Motor_Driver::motor_Run(){
+  if(Motor_Driver::active_mode == ACTIVE_LOW){
+    digitalWrite(Motor_Driver::ena_Pin, LOW);
+  }
+
+  else if(Motor_Driver::active_mode == ACTIVE_HIGH){
+    digitalWrite(Motor_Driver::ena_Pin, HIGH);
+  }
+}
+
+void Motor_Driver::motor_Brake(){
+  if(Motor_Driver::active_mode == ACTIVE_LOW){
+    digitalWrite(Motor_Driver::ena_Pin, HIGH);
+  }
+
+  else if(Motor_Driver::active_mode == ACTIVE_HIGH){
+    digitalWrite(Motor_Driver::ena_Pin, LOW);
+  }
+}
+
+void Motor_Driver::motor_Start(){
   if(Motor_Driver::active_mode == ACTIVE_LOW){
     digitalWrite(Motor_Driver::sig_Pin, LOW);
   }

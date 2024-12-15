@@ -2,7 +2,7 @@
   SERIAL COMMUNICATION LIBRARY V2
   PT. Stechoq Robotika Indonesia
   
-  Date    : 25 OKTOBER 2024
+  Date    : 25 Oktober 2024
   Author  : Alfonsus Giovanni Mahendra Putra - Universitas Diponegoro
 */
 
@@ -85,15 +85,15 @@ typedef struct{
   Current_Pos,
   SensorA_Status,
   SensorB_Status,
-  Tag_sign,
+  Tag_sign;
+
+  uint16_t
   Start_coordinateX,
   Start_coordinateY,
   Goal_coordinateX,
   Goal_coordinateY,
   Current_coordinateX,
-  Current_coordinateY;
-
-  uint16_t
+  Current_coordinateY,
   Tag_value,
   Tag_num,
   CurrentPos_Value,

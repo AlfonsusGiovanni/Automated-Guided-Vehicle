@@ -2,7 +2,7 @@
   AGV PID LIBRARY
   PT. Stechoq Robotika Indonesia
   
-  Date    : 18 SEPTEMBER 2024
+  Date    : 18 September 2024
   Author  : Alfonsus Giovanni Mahendra Putra - Universitas Diponegoro
 */
 

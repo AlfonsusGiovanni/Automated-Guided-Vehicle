@@ -35,10 +35,9 @@ class Motor_Driver{
 
     void driver_Pinset(const uint8_t enaPin, const uint8_t pwmPin, const uint8_t dirPin, const uint8_t sigPin);
 
-    void driver_Enable(void);
-    void driver_Disable(void);
-
     void motor_Run(void);
+    void motor_Brake(void);
+    void motor_Start(void);
     void motor_Stop(void);
 
     void set_Dir(motor_dir input_dir);

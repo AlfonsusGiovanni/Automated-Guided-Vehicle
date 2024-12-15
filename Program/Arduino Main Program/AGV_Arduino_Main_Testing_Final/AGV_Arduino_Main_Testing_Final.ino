@@ -488,10 +488,11 @@ void setup(){
       L_Motor1.driver_Pinset(ENA_L, PWM_L, DIR_L, SIG_LR);
       R_Motor1.driver_Pinset(ENA_R, PWM_R, DIR_R, SIG_LR);
 
-      L_Motor1.driver_Enable();
-      R_Motor1.driver_Enable();
-      L_Motor1.motor_Run();
-      R_Motor1.motor_Run();
+      L_Motor1.motor_Start();
+      R_Motor1.motor_Start();
+
+      L_Motor1.motor_Brake();
+      R_Motor1.motor_Brake();
 
       // NFC Pin Setup
       pinMode(IRQ_NFC1, OUTPUT);
@@ -631,8 +632,8 @@ void loop(){
 
   #ifdef TEST_ODOMETRY
     digitalWrite(PILOTLAMP_PIN, HIGH);
-    // GoTo(0, 1500, 150);
-    Motor_Handler(LIDAR_MODE, FORWARD, NORMAL_ACCEL, REGENERATIVE_BRAKE, 50);
+    GoTo(0, 1500, 150);
+    // Motor_Handler(LIDAR_MODE, FORWARD, NORMAL_ACCEL, REGENERATIVE_BRAKE, 50);
 
     Serial.print("Left Counter: ");
     Serial.print(odometry.wl_counter);
@@ -721,10 +722,6 @@ void loop(){
 
       if(parameter.Running_Mode == LF_MODE){
         Read_Sens(FRONT);
-        // if(millis() - prev_tickC > nfc_read_interval){
-        //   NFC_Handler(FRONT_NFC);
-        //   prev_tickC = millis();
-        // }
 
         // Check if there is no line and home tag detected
         if(!line_detected && NFC_F.tagType != HOME_SIGN){
@@ -821,15 +818,8 @@ void loop(){
         break;
 
         case PAUSE:
-        if(millis() > prev_tickComrx > 100){
-          Receive_Serial(&parameter);
-          prev_tickComrx = millis();
-        }
-
-        if(running){
-          Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
-        }
-        else Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, NORMAL_BRAKE, parameter.Base_Speed);
+        Receive_Serial(&parameter);
+        Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
         break;
       }
     }
@@ -1089,11 +1079,11 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     running = true;
     
     if(mode == LF_MODE){
+      L_Motor1.motor_Start();
+      R_Motor1.motor_Start();
+
       L_Motor1.motor_Run();
       R_Motor1.motor_Run();
-
-      L_Motor1.driver_Enable();
-      R_Motor1.driver_Enable();
 
       Calc_LF_PID(FRONT);
 
@@ -1102,8 +1092,8 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     }
 
     else if(mode == LIDAR_MODE){
-      L_Motor2.driver_Enable();
-      R_Motor2.driver_Enable();
+      L_Motor2.motor_Run();
+      R_Motor2.motor_Run();
      
       L_Motor2.set_Dir(CCW);
       R_Motor2.set_Dir(CW);
@@ -1191,11 +1181,11 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     running = true;
 
     if(mode == LF_MODE){
+      L_Motor1.motor_Start();
+      R_Motor1.motor_Start();
+
       L_Motor1.motor_Run();
       R_Motor1.motor_Run();
-
-      L_Motor1.driver_Enable();
-      R_Motor1.driver_Enable();
 
       Calc_LF_PID(REAR);
 
@@ -1204,8 +1194,8 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     }
 
     else if(mode == LIDAR_MODE){
-      L_Motor2.driver_Enable();
-      R_Motor2.driver_Enable();
+      L_Motor2.motor_Run();
+      R_Motor2.motor_Run();
      
       L_Motor2.set_Dir(CW);
       R_Motor2.set_Dir(CCW);
@@ -1287,19 +1277,19 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     running = true;
 
     if(mode == LF_MODE){
-      L_Motor1.motor_Run();
-      R_Motor1.motor_Run();
+      L_Motor1.motor_Start();
+      R_Motor1.motor_Start();
 
-      L_Motor1.driver_Disable();
-      R_Motor1.driver_Enable();
+      L_Motor1.motor_Brake();
+      R_Motor1.motor_Run();
 
       R_Motor1.set_Dir(CW);
       R_Motor1.set_Speed(speed);
     }
 
     else if(mode == LIDAR_MODE){
-      L_Motor2.driver_Disable();
-      R_Motor2.driver_Enable();
+      L_Motor2.motor_Brake();
+      R_Motor2.motor_Run();
 
       R_Motor2.set_Dir(CW);
       R_Motor2.set_Speed(speed);
@@ -1310,19 +1300,19 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     running = true;
 
     if(mode == LF_MODE){
-      L_Motor1.motor_Run();
-      R_Motor1.motor_Run();
+      L_Motor1.motor_Start();
+      R_Motor1.motor_Start();
 
-      L_Motor1.driver_Enable();
-      R_Motor1.driver_Disable();
+      L_Motor1.motor_Run();
+      R_Motor1.motor_Brake();
 
       L_Motor1.set_Dir(CCW);
       L_Motor1.set_Speed(speed);
     }
 
     else if(mode == LIDAR_MODE){
-      L_Motor2.driver_Enable();
-      R_Motor2.driver_Disable();
+      L_Motor2.motor_Run();
+      R_Motor2.motor_Brake();
 
       L_Motor2.set_Dir(CCW);
       L_Motor2.set_Speed(speed);
@@ -1333,11 +1323,11 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     running = true;
 
     if(mode == LF_MODE){
+      L_Motor1.motor_Start();
+      R_Motor1.motor_Start();
+
       L_Motor1.motor_Run();
       R_Motor1.motor_Run();
-
-      L_Motor1.driver_Enable();
-      R_Motor1.driver_Enable();
 
       L_Motor1.set_Dir(CW);
       R_Motor1.set_Dir(CW);
@@ -1347,8 +1337,8 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     }
 
     else if(mode == LIDAR_MODE){
-      L_Motor2.driver_Enable();
-      R_Motor2.driver_Enable();
+      L_Motor2.motor_Run();
+      R_Motor2.motor_Run();
 
       L_Motor2.set_Dir(CW);
       R_Motor2.set_Dir(CW);
@@ -1362,11 +1352,11 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     running = true;
 
     if(mode == LF_MODE){
+      L_Motor1.motor_Start();
+      R_Motor1.motor_Start();
+
       L_Motor1.motor_Run();
       R_Motor1.motor_Run();
-
-      L_Motor1.driver_Enable();
-      R_Motor1.driver_Enable();
 
       L_Motor1.set_Dir(CCW);
       R_Motor1.set_Dir(CCW);
@@ -1376,8 +1366,8 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     }
 
     else if(mode == LIDAR_MODE){
-      L_Motor2.driver_Enable();
-      R_Motor2.driver_Enable();
+      L_Motor2.motor_Run();
+      R_Motor2.motor_Run();
 
       L_Motor2.set_Dir(CCW);
       R_Motor2.set_Dir(CCW);
@@ -1391,16 +1381,16 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     switch(brake){
       case NORMAL_BRAKE:
       if(mode == LF_MODE){
-        L_Motor1.motor_Run();
-        R_Motor1.motor_Run();
+        L_Motor1.motor_Start();
+        R_Motor1.motor_Start();
 
-        L_Motor1.driver_Disable();
-        R_Motor1.driver_Disable();
-      }
+        L_Motor1.motor_Brake();
+        R_Motor1.motor_Brake();
+      } 
 
       else if(mode == LIDAR_MODE){
-        L_Motor2.driver_Disable();
-        R_Motor2.driver_Disable();
+        L_Motor2.motor_Brake();
+        R_Motor2.motor_Brake();
       }
       running = false;
       break;
@@ -1421,22 +1411,18 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
         }
 
         if(mode == LF_MODE){
-          L_Motor1.motor_Stop();
-          R_Motor1.motor_Stop();
+          L_Motor1.motor_Start();
+          R_Motor1.motor_Start();
 
-          L_Motor1.driver_Enable();
-          R_Motor1.driver_Enable();
+          L_Motor1.motor_Brake();
+          R_Motor1.motor_Brake();
         }
 
         else if(mode == LIDAR_MODE){
-          L_Motor2.driver_Disable();
-          R_Motor2.driver_Disable();
+          L_Motor2.motor_Brake();
+          R_Motor2.motor_Brake();
         }
         running = false;
-      }
-
-      else if(!running){
-        
       }
       break;
     }
@@ -1491,6 +1477,10 @@ void Destination_Handler(void){
     path_planned = false;
   }
 
+  if(path_planned == false){
+    Run_Path_Planning();
+  }
+
   if(turning_decision == TURN_STOP){
     if(parameter.Tag_sign == HOME_SIGN){
       parameter.Current_Pos = HOME;
@@ -1514,7 +1504,6 @@ void Destination_Handler(void){
       parameter.Current_Pos = ON_STATION;
       parameter.CurrentPos_Value = parameter.Tag_value;
       Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
-      digitalWrite(SIG_LR, HIGH);
 
       while(1){
         if(Station_Handler() == true) break;
@@ -1525,44 +1514,53 @@ void Destination_Handler(void){
       parameter.Running_State = PAUSE;
     }
   }
-
-  else if(turning_decision != TURN_STOP && path_planned == false){
-    Run_Path_Planning();
-  }
 }
 
 // Custom Destination Handler Without Path Planning
 void Custom_Destination_Handler(void){
   if(parameter.Current_coordinateX == parameter.Goal_coordinateX || parameter.Current_coordinateY == parameter.Goal_coordinateY){
+    Transmit_Serial(&parameter);
     parameter.Current_Pos = ON_STATION;
     parameter.CurrentPos_Value = parameter.Tag_value;
     Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
-    digitalWrite(SIG_LR, HIGH);
 
     while(1){
+      Transmit_Serial(&parameter);
       if(Station_Handler() == true) break;
       else continue;
     }
-
     turning_decision = NONE_TURN;
     parameter.Running_State = PAUSE;
-  } 
+  }
 }
 
 // Station Package Sync Algorithm
 bool Station_Handler(void){
   rear_state = !Read_Proximity(REAR);
 
-  if(rear_state != 1){
-    digitalWrite(SPEAKER_PIN, HIGH);
-    digitalWrite(PILOTLAMP_PIN, LOW);
-    return false;
+  if(rear_state == 0){
+    if(parameter.Goal_coordinateX == 7){
+      digitalWrite(SPEAKER_PIN, HIGH);
+      digitalWrite(PILOTLAMP_PIN, LOW);
+      return false;
+    }
+    else if(parameter.Goal_coordinateX == 1){
+      digitalWrite(SPEAKER_PIN, LOW);
+      digitalWrite(PILOTLAMP_PIN, HIGH);
+      return true;
+    }
   }
   else{
-    digitalWrite(SPEAKER_PIN, LOW);
-    digitalWrite(PILOTLAMP_PIN, HIGH);
-    //delay(3000);
-    return true;
+    if(parameter.Goal_coordinateX == 7){
+      digitalWrite(SPEAKER_PIN, LOW);
+      digitalWrite(PILOTLAMP_PIN, HIGH);
+      return true;
+    }
+    else if(parameter.Goal_coordinateX == 1){
+      digitalWrite(SPEAKER_PIN, HIGH);
+      digitalWrite(PILOTLAMP_PIN, LOW);
+      return false;
+    }
   }
 }
 
@@ -1571,41 +1569,59 @@ void Turn_Check(NFC_Select_t select){
   if(select == FRONT_NFC){
     // DETEKSI AWAL BELOKAN
     if(parameter.Tag_sign != TURN_SIGN && NFC_F.tagType == TURN_SIGN){
-      decrease_speedL = NFC_F.tagTypeValue - 15;
-      decrease_speedR = NFC_F.tagTypeValue - 15;
-      prev_tickE = millis();
+      decrease_speedL = NFC_F.tagTypeValue;
+      decrease_speedR = NFC_F.tagTypeValue;
+      prev_tickD = millis();
     }
 
     // DETEKSI AKHIR BELOKAN
-    else if(millis() - prev_tickE >= 2000 && millis() - prev_tickE < 5000 && NFC_F.tagType == TURN_SIGN){
+    else if(millis() - prev_tickD >= 2000 && millis() - prev_tickD < 6000 && NFC_F.tagType == TURN_SIGN){
       decrease_speedL = 0;
       decrease_speedR = 0;
       turn_timer_cnt = 0;
       parameter.Tag_sign = NONE_SIGN;
     }
 
-    if(millis() - prev_tickD > 1000 && NFC_F.tagType == NONE_SIGN && decrease_speedR == 0 && decrease_speedL == 0){
+    // RESET JIKA AKHIR BELOKAN TIDAK TERDETEKSI
+    else if(millis() - prev_tickD >= 6000 && NFC_F.tagType != TURN_SIGN){
+      decrease_speedL = 0;
+      decrease_speedR = 0;
+      turn_timer_cnt = 0;
       parameter.Tag_sign = NONE_SIGN;
-      prev_tickD = millis();
+    }
+
+    // RESET SAAT JALAN LURUS
+    if(millis() - prev_tickE > 1000 && NFC_F.tagType == NONE_SIGN && decrease_speedR == 0 && decrease_speedL == 0){
+      parameter.Tag_sign = NONE_SIGN;
+      prev_tickE = millis();
     }
   }
 
   else if(select == REAR_NFC){
     // DETEKSI AWAL BELOKAN
     if(parameter.Tag_sign != TURN_SIGN && NFC_R.tagType == TURN_SIGN){
-      decrease_speedL = NFC_R.tagTypeValue - 10;
-      decrease_speedR = NFC_R.tagTypeValue - 10;
+      decrease_speedL = NFC_R.tagTypeValue;
+      decrease_speedR = NFC_R.tagTypeValue;
       prev_tickD = millis();
     }
 
     // DETEKSI AKHIR BELOKAN
-    else if(millis() - prev_tickD >= 2000 && millis() - prev_tickD < 5000 && NFC_R.tagType == TURN_SIGN){
+    else if(millis() - prev_tickD >= 2000 && millis() - prev_tickD < 6000 && NFC_R.tagType == TURN_SIGN){
       decrease_speedL = 0;
       decrease_speedR = 0;
       turn_timer_cnt = 0;
       parameter.Tag_sign = NONE_SIGN;
     }
 
+    // RESET JIKA AKHIR BELOKAN TIDAK TERDETEKSI
+    else if(millis() - prev_tickD >= 6000 && NFC_R.tagType != TURN_SIGN){
+      decrease_speedL = 0;
+      decrease_speedR = 0;
+      turn_timer_cnt = 0;
+      parameter.Tag_sign = NONE_SIGN;
+    }
+
+    // RESET SAAT JALAN LURUS
     if(millis() - prev_tickE > 1000 && NFC_R.tagType == NONE_SIGN && decrease_speedR == 0 && decrease_speedL == 0){
       parameter.Tag_sign = NONE_SIGN;
       prev_tickE = millis();
@@ -1671,7 +1687,7 @@ void Cross_Check(NFC_Select_t select){
 
 // PATH PLANNING FUNCTION
 void Run_Path_Planning(void){
-  Point start_pos(parameter.Start_coordinateX, parameter.Start_coordinateY);
+  Point start_pos(0, 0);
   Point goal_pos(parameter.Goal_coordinateX, parameter.Goal_coordinateY);
 
   if(!Run_AStar(start_pos, goal_pos)){
@@ -1783,10 +1799,6 @@ void NFC_Handler(NFC_Select_t select){
       parameter.Current_coordinateX = NFC_F.tagPosX;
       parameter.Current_coordinateY = NFC_F.tagPosY;
     }
-    else{
-      parameter.Current_coordinateX = NFC_F.tagPosX;
-      parameter.Current_coordinateY = NFC_F.tagPosY;
-    }
   }
 
   else if(select == REAR_NFC){
@@ -1802,15 +1814,11 @@ void NFC_Handler(NFC_Select_t select){
     // Destination_Handler();
     Custom_Destination_Handler();
 
-    if(NFC_F.tagType != NONE_SIGN){
+    if(NFC_R.tagType != NONE_SIGN){
       parameter.Tag_sign = NFC_R.tagType;
       parameter.Tag_value = NFC_R.tagTypeValue;
       parameter.Tag_num = NFC_R.tagNum;
     
-      parameter.Current_coordinateX = NFC_R.tagPosX;
-      parameter.Current_coordinateY = NFC_R.tagPosY;
-    }
-    else{
       parameter.Current_coordinateX = NFC_R.tagPosX;
       parameter.Current_coordinateY = NFC_R.tagPosY;
     }
