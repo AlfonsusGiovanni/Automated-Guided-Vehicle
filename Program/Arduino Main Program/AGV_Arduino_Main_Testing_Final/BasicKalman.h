@@ -14,14 +14,13 @@ class Kalman{
     float
     Q = 0.1,
     R = 0.5,
-    P_init = 1.0,
-    K_init = 0.5;
+    P_init,
+    K_init;
   public:
     float 
-    Est_val,  // Nilai estimasi
-    P_val,    // Estimasi nilai variasi error
-    K_val;    // 
+    Est_val;
 
+    Kalman(float input_Q, float input_R, float input_P, float input_K);
     float get_kalman_val(float input_data);
 };
 

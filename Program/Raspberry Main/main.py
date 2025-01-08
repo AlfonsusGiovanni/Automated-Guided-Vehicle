@@ -89,7 +89,7 @@ AGV1.System_Set(Serial.UART_COM.running_mode.LF_MODE, 80, Serial.UART_COM.accel_
 for i in range(0, 100):
     Serial.UART_COM.Start_coordinateY = 0
     Serial.UART_COM.Goal_coordinateY = 1500
-    Serial.UART_COM.Running_Mode = Serial.UART_COM.running_mode.LIDAR_MODE
+    Serial.UART_COM.Running_Mode = Serial.UART_COM.running_mode.LF_MODE
     Serial.UART_COM.Running_State = Serial.UART_COM.running_state.START
     Serial.UART_COM.Transmit_Data()
 print("Init Done")
@@ -103,20 +103,36 @@ AGV1.SerialReceive_Thread_On = True
 Transmitter_Thread.start()
 Receiver_Thread.start()
 
+destination_counter = 0
+
 while True:
     # print("Run Start")
     # Serial.UART_COM.Running_State = Serial.UART_COM.running_state.START
     # print([hex(i) for i in Serial.UART_COM.return_data])
 
-    print("AGV Running Mode: ", Serial.UART_COM.Running_Mode)
-    print("AGV Running State: ", Serial.UART_COM.Running_State)
-    print("AGV Position: ", Serial.UART_COM.Current_Pos)
-    print("AGV Pos Value: ", Serial.UART_COM.CurrentPos_value)
-    print("AGV Send Counter: ", Serial.UART_COM.Send_Counter)
-    print("AGV Pickup Counter: ", Serial.UART_COM.Pickup_Counter)
-    print("AGV Battery Level: ", Serial.UART_COM.Battery_Level)
+    # print("AGV Running State: ", Serial.UART_COM.Running_State)
+    # print("AGV Running Mode: ", Serial.UART_COM.Running_Mode)
+    # print("AGV Position: ", Serial.UART_COM.Current_Pos)
+    # print("AGV Pos Value: ", Serial.UART_COM.CurrentPos_value)
+    # print("AGV Send Counter: ", Serial.UART_COM.Send_Counter)
+    # print("AGV Pickup Counter: ", Serial.UART_COM.Pickup_Counter)
+    # print("AGV Battery Level: ", Serial.UART_COM.Battery_Level)
     # print("Sign Type: ", Serial.UART_COM.Tag_sign)
     # print("Sign Value: ", Serial.UART_COM.Tag_value)
     # print("Sign Num: ", Serial.UART_COM.Tag_num)
+
+    if Serial.UART_COM.Current_Pos != Serial.UART_COM.sign_data.CARRIER_SIGN and destination_counter == 0:
+        Serial.UART_COM.Start_coordinateX = 0
+        Serial.UART_COM.Start_coordinateY = 7
+        Serial.UART_COM.Goal_coordinateX = 4
+        Serial.UART_COM.Goal_coordinateY = 7
+        destination_counter = 1
+
+    elif Serial.UART_COM.Current_Pos != Serial.UART_COM.sign_data.STATION_SIGN and destination_counter == 1:
+        Serial.UART_COM.Start_coordinateX = Serial.UART_COM.Current_coordinateX
+        Serial.UART_COM.Start_coordinateY = Serial.UART_COM.Current_coordinateY
+        Serial.UART_COM.Goal_coordinateX = 4
+        Serial.UART_COM.Goal_coordinateY = 7
+        destination_counter = 2
 
     time.sleep(1)

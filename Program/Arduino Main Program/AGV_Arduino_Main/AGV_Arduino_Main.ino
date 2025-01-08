@@ -14,6 +14,7 @@
 #include "CustomSerial.h"
 #include "Odo_Localization.h"
 #include "Motor_Driver.h"
+#include "BasicKalman.h"
 
 /*User Private Define*/
 #define SENS_SWITCH 2
@@ -65,7 +66,7 @@
 const uint8_t
 sens_pin[SENS_COUNT][SENS_NUM] = {53, 51, 49, 47, 45, 43, 41, 39, 37, 35, 33, 31, 29, 27, 25, 23};
 
-const int32_t
+const float
 sens_weight[SENS_NUM] = {0, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5, 42.5, 47.5, 52.5, 57.5, 62.5, 67.5, 72.5, 80};
 
 const int
@@ -135,6 +136,7 @@ cutOff = 0.04;
 
 float
 line_pos,
+line_pos_kalman,
 lf_pid_val,
 balancer_pid_val,
 bat_voltage,
@@ -151,8 +153,8 @@ current_position,
 prev_position;
 
 unsigned long
-prev_dummytick1,  // -> Dummy Testing Tick 1
-prev_dummytick2,  // -> Dummy Testing Tick 2
+prev_tickLED,     // -> Dummy Testing Tick 1
+prev_tickPrep,    // -> Timer Start Preparation
 prev_tickComtx,   // -> Timer Serial Com TX
 prev_tickComrx,   // -> Timer Serial Com RX
 prev_turningTick, // -> Turning Reset Tick
@@ -302,6 +304,7 @@ typedef DFRobot_BNO055_IIC  BNO;
 BNO::sEulAnalog_t eul_value;
 
 /*User Private Class Init*/
+Kalman kalman(0.1, 0.5, 1.0, 0.5);
 Adafruit_PN532 nfc(IRQ_NFC1, 3);
 Odometry odometry(150, 413, 60);
 BNO bno(&Wire, 0x28);
@@ -438,7 +441,31 @@ void setup(){
   PIDController_Init(&pid_gyro_corr);
 
   NFC_F.tagType = HOME_SIGN;
+  
+  digitalWrite(PILOTLAMP_PIN, HIGH);
+  delay(250);
+  digitalWrite(PILOTLAMP_PIN, LOW);
+  delay(250);
 
+  // All setup done, start initializing
+  while(1){
+    if(digitalRead(START_BTN) == LOW){
+      if(millis() - prev_tickPrep > 3000){
+        for(int i=0; i<2; i++){
+          digitalWrite(PILOTLAMP_PIN, HIGH);
+          delay(500);
+          digitalWrite(PILOTLAMP_PIN, LOW);
+          delay(500);
+        }
+        break;
+      }
+    }
+    else{
+      prev_tickPrep = millis();
+    }
+  }
+
+  // Waiting init data from AGV CC
   while(1){
     Receive_Serial(&parameter); 
     digitalWrite(PILOTLAMP_PIN, LOW);
@@ -500,19 +527,19 @@ void loop(){
 
       // Check if there is no line and home tag detected
       if(!line_detected && NFC_F.tagType != HOME_SIGN){
-        if(millis() - prev_dummytick1 > 150){
+        if(millis() - prev_tickLED > 150){
           if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
           else digitalWrite(PILOTLAMP_PIN, LOW);
-          prev_dummytick1 = millis();
+          prev_tickLED = millis();
         }
       }
 
       // Check if line or home tag is detected
       else if((line_detected && NFC_F.tagType != HOME_SIGN) || (!line_detected && NFC_F.tagType == HOME_SIGN)){
-        if(millis() - prev_dummytick1 > 500){
+        if(millis() - prev_tickLED > 500){
           if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
           else digitalWrite(PILOTLAMP_PIN, LOW);
-          prev_dummytick1 = millis();
+          prev_tickLED = millis();
         }
         head_dir = HEAD_XP;
       }
@@ -583,10 +610,10 @@ void loop(){
       break;
 
       case STOP:
-      if(millis() > prev_dummytick1 > 500){
+      if(millis() > prev_tickLED > 500){
         if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
         else digitalWrite(PILOTLAMP_PIN, LOW);
-        prev_dummytick1 = millis();
+        prev_tickLED = millis();
       }
 
       Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
@@ -667,6 +694,7 @@ void Read_Sens(Sens_sel_t sensor_sel){
   }
   else{
     line_pos = 40 - (total_weight/sens_count);
+    line_pos_kalman = kalman.get_kalman_val(line_pos);
     line_detected = true;
   }
 }
@@ -676,11 +704,11 @@ void Calc_LF_PID(Sens_sel_t sensor_sel){
   Read_Sens(sensor_sel);
 
   if(sensor_sel == FRONT){
-    PIDController_Update(&pid_agv_f, 0, line_pos);
+    PIDController_Update(&pid_agv_f, 0, line_pos_kalman);
     lf_pid_val = pid_agv_f.out;
   }
   else{
-    PIDController_Update(&pid_agv_b, 0, line_pos);
+    PIDController_Update(&pid_agv_b, 0, line_pos_kalman);
     lf_pid_val = pid_agv_b.out;
   }
 }
@@ -749,10 +777,10 @@ void Line_Check(uint8_t mode){
           break;
         }
         else{
-          if(millis() - prev_dummytick1 > 500){
+          if(millis() - prev_tickLED > 500){
             if(digitalRead(PILOTLAMP_PIN) == LOW) digitalWrite(PILOTLAMP_PIN, HIGH);
             else digitalWrite(PILOTLAMP_PIN, LOW);
-            prev_dummytick1 = millis();
+            prev_tickLED = millis();
           }
           Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
           continue;
@@ -1353,7 +1381,6 @@ void Turn_Check(NFC_Select_t select){
     else if(millis() - prev_tickD >= 2000 && millis() - prev_tickD < 6000 && NFC_F.tagType == TURN_SIGN){
       decrease_speedL = 0;
       decrease_speedR = 0;
-      turn_timer_cnt = 0;
       parameter.Tag_sign = NONE_SIGN;
     }
 
@@ -1361,7 +1388,6 @@ void Turn_Check(NFC_Select_t select){
     else if(millis() - prev_tickD >= 6000 && NFC_F.tagType != TURN_SIGN){
       decrease_speedL = 0;
       decrease_speedR = 0;
-      turn_timer_cnt = 0;
       parameter.Tag_sign = NONE_SIGN;
     }
 
@@ -1384,7 +1410,6 @@ void Turn_Check(NFC_Select_t select){
     else if(millis() - prev_tickD >= 2000 && millis() - prev_tickD < 6000 && NFC_R.tagType == TURN_SIGN){
       decrease_speedL = 0;
       decrease_speedR = 0;
-      turn_timer_cnt = 0;
       parameter.Tag_sign = NONE_SIGN;
     }
 
@@ -1392,7 +1417,6 @@ void Turn_Check(NFC_Select_t select){
     else if(millis() - prev_tickD >= 6000 && NFC_R.tagType != TURN_SIGN){
       decrease_speedL = 0;
       decrease_speedR = 0;
-      turn_timer_cnt = 0;
       parameter.Tag_sign = NONE_SIGN;
     }
 

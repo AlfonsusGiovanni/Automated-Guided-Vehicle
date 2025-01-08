@@ -140,7 +140,7 @@ class Serial_COM:
           self.Tag_value = 0
           self.Tag_num = 0
           self.Current_coordinateX = 0
-          self.CUrrent_coordinateY = 0
+          self.Current_coordinateY = 0
           self.Send_Counter = 0
           self.Pickup_Counter = 0
           self.Battery_Level = 0
