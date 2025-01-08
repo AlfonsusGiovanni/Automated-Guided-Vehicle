@@ -108,7 +108,7 @@ cellSize = 10;
 
 uint8_t
 line_false_interval = 150,
-regenerative_interval = 10,
+regenerative_interval = 20,
 nfc_read_interval = 25;
 
 uint8_t
@@ -117,7 +117,7 @@ prev_dir;
 
 uint8_t
 NFC_Timeout = 25,
-brake_val = 10,
+brake_val = 5,
 adaptive_timer,
 decrease_speedL,
 decrease_speedR,
@@ -139,7 +139,9 @@ step_stack,
 stack_size,
 free_nodes_count,
 turning_decision,
-prev_goalX, prev_goalY,
+prev_goalX, prev_goalY;
+
+char
 path_step[gridWidth*gridHeight];
 
 uint16_t
@@ -366,7 +368,7 @@ bool Station_Handler(uint8_t mode);
 void NFC_Handler(NFC_Select_t select);
 void Turn_Check(NFC_Select_t select);
 void Cross_Check(NFC_Select_t select);
-void Station_Check(NFC_Select_t select);
+void CarrierStation_Check(NFC_Select_t select);
 void Nodes_check(NFC_Select_t select);
 void Run_Path_Planning(void);
 
@@ -432,7 +434,7 @@ void setup(){
   // PID LF Setup
   pid_agv_f.Kp        = 0.825;
   pid_agv_f.Ki        = 0.0005;       
-  pid_agv_f.Kd        = 0.007; 		
+  pid_agv_f.Kd        = 0.0035; 		
   pid_agv_f.tau       = 0.01;
 	pid_agv_f.limMax    = 100;     
   pid_agv_f.limMin    = -100;     
@@ -737,7 +739,7 @@ void loop(){
       parameter.Pickup_counter = 11;
       parameter.Battery_level = 90.5;
 
-      Transmit_Serial(&parameter);
+      // Transmit_Serial(&parameter);
 
       // if(millis() - prev_dummytick1 > 5000){
       //   parameter.Running_Mode = NOT_SET;
@@ -808,17 +810,11 @@ void loop(){
             parameter.Goal_coordinateX = 4;
             parameter.Goal_coordinateY = 7;
 
-            Destination_Handler();
-
             head_dir = HEAD_XP;
-
-            Serial.print("Stack Size: ");
-            Serial.println(stack_size);
+            Destination_Handler();
             
             digitalWrite(PILOTLAMP_PIN, LOW);
             delay(1000);
-            // parameter.Running_State = START;
-            // config_done = true;
           }
         }
       }
@@ -839,9 +835,7 @@ void loop(){
           
           digitalWrite(PILOTLAMP_PIN, LOW);
           delay(1000);
-          parameter.Running_State = START;
           odometry.reset_Pos();
-          config_done = true;
         }
       }
 
@@ -856,7 +850,7 @@ void loop(){
       switch(parameter.Running_State){
         case START:
         parameter.Current_Pos = ON_THE_WAY;
-        Transmit_Serial(&parameter);
+        // Transmit_Serial(&parameter);
         Run_AGV(parameter.Running_Mode);
         break;
 
@@ -872,7 +866,9 @@ void loop(){
 
         case PAUSE:
         Receive_Serial(&parameter);
-        Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
+        if(running){
+          Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
+        }
         break;
       }
     }
@@ -1141,8 +1137,6 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
       L_Motor1.motor_Run();
       R_Motor1.motor_Run();
 
-      Calc_LF_PID(FRONT);
-
       L_Motor1.set_Dir(CCW);
       R_Motor1.set_Dir(CW);
     }
@@ -1242,8 +1236,6 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
 
       L_Motor1.motor_Run();
       R_Motor1.motor_Run();
-
-      Calc_LF_PID(REAR);
 
       L_Motor1.set_Dir(CW);
       R_Motor1.set_Dir(CCW);
@@ -1436,19 +1428,21 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
     case BRAKE:
     switch(brake){
       case NORMAL_BRAKE:
-      if(mode == LF_MODE){
-        L_Motor1.motor_Start();
-        R_Motor1.motor_Start();
+      if(running){
+        if(mode == LF_MODE){
+          L_Motor1.motor_Start();
+          R_Motor1.motor_Start();
 
-        L_Motor1.motor_Brake();
-        R_Motor1.motor_Brake();
-      } 
+          L_Motor1.motor_Brake();
+          R_Motor1.motor_Brake();
+        } 
 
-      else if(mode == LIDAR_MODE){
-        L_Motor2.motor_Brake();
-        R_Motor2.motor_Brake();
+        else if(mode == LIDAR_MODE){
+          L_Motor2.motor_Brake();
+          R_Motor2.motor_Brake();
+        }
+        running = false;
       }
-      running = false;
       break;
 
       case REGENERATIVE_BRAKE:
@@ -1478,6 +1472,7 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
           L_Motor2.motor_Brake();
           R_Motor2.motor_Brake();
         }
+
         running = false;
       }
       break;
@@ -1508,8 +1503,6 @@ void Run_AGV(uint8_t agv_mode){
           prev_tickC = millis();
         }
       }
-
-      Destination_Handler();
       Motor_Handler(parameter.Running_Mode, parameter.Running_Dir, parameter.Running_Accel, parameter.Running_Brake, parameter.Base_Speed);
       Line_Check(1);
     }
@@ -1556,22 +1549,26 @@ void Destination_Handler(void){
       parameter.CurrentPos_Value = parameter.Tag_value;
       
       if(!with_carrier){
+        Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
+        lf_pid_val = 0;
+
         while(1){
           if(Station_Handler(0) == true){
-            Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, 20);
+            Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, NORMAL_BRAKE, 20);
             delay(1000);
             PinHook_Handler(UP);
+            with_carrier = true;
             break;
           }
           else{
-            Motor_Handler(parameter.Running_Mode, FORWARD, NORMAL_ACCEL, REGENERATIVE_BRAKE, 20);
+            Motor_Handler(parameter.Running_Mode, parameter.Running_Dir, NORMAL_ACCEL, NORMAL_BRAKE, 20);
           }
         }
       }
 
       else{
         delay(1000);
-        Motor_Handler(parameter.Running_Mode, FORWARD, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
+        Motor_Handler(parameter.Running_Mode, parameter.Running_Dir, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
         delay(1000);
         PinHook_Handler(DOWN);
       }
@@ -1744,12 +1741,12 @@ void Cross_Check(NFC_Select_t select){
       }
 
       else if(turning_decision == STRAIGHT){
+        digitalWrite(PILOTLAMP_PIN, HIGH);
         decrease_speedR = 30;
         decrease_speedL = 30;
         adaptive_timer = 0;
       }
       prev_tickF = millis();
-      digitalWrite(PILOTLAMP_PIN, HIGH);
     }
     
     // DETEKSI AKHIR SIMPANGAN
@@ -1774,6 +1771,11 @@ void Cross_Check(NFC_Select_t select){
   }
 }
 
+// Carrier Station Check Function
+void CarrierStation_Check(NFC_Select_t select){
+  
+}
+
 // PATH PLANNING FUNCTION
 void Run_Path_Planning(void){
   Point start_pos(parameter.Start_coordinateX, parameter.Start_coordinateY);
@@ -1785,24 +1787,43 @@ void Run_Path_Planning(void){
 
   else{
     Reconstruct_Path(start_pos, goal_pos);
+    // for(int i=0; i<=stack_size; i++){
+    //   Serial.print(invert_traceBack[i].x);
+    //   Serial.print(invert_traceBack[i].y);
+    //   Serial.print("-");
+    // }
+    // Serial.println(" ");
+
     Reconstruct_PathDir();
+    // for(int i=0; i<=stack_size; i++){
+    //   Serial.print(path_step[i]);
+    //   Serial.print("-");
+    // }
+    // Serial.println(" ");
+
     path_planned = true;
   }
 }
 
 // NODES CHECK FUNCTION
 void Nodes_Check(NFC_Select_t select){
-  if(select == FRONT_NFC){
-    if(NFC_F.tagType != NONE_SIGN && NFC_F.tagType != TURN_SIGN){
-      for(int i=0; i<stack_size; i++){
-        if(NFC_F.tagPosX == invert_traceBack[i].x && NFC_F.tagPosY == invert_traceBack[i].y && nodes_checked[i].x != invert_traceBack[i].x && nodes_checked[i].y != invert_traceBack[i].y){
-          nodes_checked[i] = invert_traceBack[i];
+  // Serial.print("Tag pos X: ");
+  // Serial.print(NFC_F.tagPosX);
+  // Serial.print("\t");
+  // Serial.print("Tag pos Y: ");
+  // Serial.print(NFC_F.tagPosY);
+  // Serial.print("\t");
+  // Serial.println(turning_decision);
 
-          if(path_step[i] == 'f') turning_decision = NONE_TURN;
-          else if(path_step[i] == 'r') turning_decision = TURN_RIGHT;
-          else if(path_step[i] == 'l') turning_decision = TURN_LEFT;
-          else if(path_step[i] == 's') turning_decision = TURN_STOP;
-        }
+  if(select == FRONT_NFC){
+    for(int i=0; i<=stack_size; i++){
+      if(NFC_F.tagPosX == invert_traceBack[i].x && NFC_F.tagPosY == invert_traceBack[i].y && nodes_checked[i].x != invert_traceBack[i].x && nodes_checked[i].y != invert_traceBack[i].y){
+        nodes_checked[i] = invert_traceBack[i];
+
+        if(path_step[i] == 'f') turning_decision = STRAIGHT;
+        else if(path_step[i] == 'r') turning_decision = TURN_RIGHT;
+        else if(path_step[i] == 'l') turning_decision = TURN_LEFT;
+        else if(path_step[i] == 's') turning_decision = TURN_STOP;
       }
     }
   }
@@ -1812,15 +1833,15 @@ void Nodes_Check(NFC_Select_t select){
       if(NFC_R.tagPosX == invert_traceBack[i].x && NFC_R.tagPosY == invert_traceBack[i].y && nodes_checked[i].x != invert_traceBack[i].x && nodes_checked[i].y != invert_traceBack[i].y){
         nodes_checked[i] = invert_traceBack[i];
 
-        if(NFC_R.tagType != NONE_SIGN){
-          if(path_step[i] == 'f') turning_decision = NONE_TURN;
-          else if(path_step[i] == 'r') turning_decision = TURN_RIGHT;
-          else if(path_step[i] == 'l') turning_decision = TURN_LEFT;
-          else if(path_step[i] == 's') turning_decision = TURN_STOP;
-        }
+        if(path_step[i] == 'f') turning_decision = STRAIGHT;
+        else if(path_step[i] == 'r') turning_decision = TURN_RIGHT;
+        else if(path_step[i] == 'l') turning_decision = TURN_LEFT;
+        else if(path_step[i] == 's') turning_decision = TURN_STOP;
       }
     }
   }
+
+  Destination_Handler();
 }
 
 // NFC Handler Function
@@ -1832,8 +1853,8 @@ void NFC_Handler(NFC_Select_t select){
     nfc.SAMConfig(); 
 
     NFC_readTag(&NFC_F);
-    Turn_Check(FRONT_NFC);
     Nodes_Check(FRONT_NFC);
+    Turn_Check(FRONT_NFC);
     Cross_Check(FRONT_NFC);
 
     if(NFC_F.tagType != NONE_SIGN){
@@ -1853,8 +1874,8 @@ void NFC_Handler(NFC_Select_t select){
     nfc.SAMConfig();
 
     NFC_readTag(&NFC_R);
-    Turn_Check(REAR_NFC);
     Nodes_Check(REAR_NFC);
+    Turn_Check(REAR_NFC);
     Cross_Check(REAR_NFC);
 
     if(NFC_R.tagType != NONE_SIGN){
@@ -2020,11 +2041,13 @@ void Reconstruct_Path(Point start, Point goal){
     step_stack++;
   }
 
-  if(current.x == start.x && current.y == start.y)
+  if(current.x == start.x && current.y == start.y){
     traceBack[step_stack] = current;
+  }
 
-  for(int i=0; i<=step_stack; i++)
+  for(int i=0; i<=step_stack; i++){
     invert_traceBack[i] = traceBack[step_stack-i];
+  }
 
   stack_size = step_stack;
   step_stack = 0;
@@ -2091,6 +2114,7 @@ void Reconstruct_PathDir(void){
       }
     }
   }
+  path_step[stack_size] = 's';
 }
 
 // CHANGE HEADING POSITION

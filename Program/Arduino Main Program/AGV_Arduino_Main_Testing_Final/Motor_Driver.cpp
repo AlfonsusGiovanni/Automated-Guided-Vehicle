@@ -88,9 +88,10 @@ void Motor_Driver::set_Dir(motor_dir input_dir){
   }
 }
 
-void Motor_Driver::set_Speed(uint8_t input_speed){
-  uint8_t speed = input_speed;
+void Motor_Driver::set_Speed(int input_speed){
+  int speed = input_speed;
 
-  speed = constrain(speed, 0, Motor_Driver::max_speed);
+  if(speed < 0) speed = 0;
+  else if(speed >= Motor_Driver::max_speed) speed = Motor_Driver::max_speed;
   analogWrite(Motor_Driver::pwm_Pin, input_speed);
 }

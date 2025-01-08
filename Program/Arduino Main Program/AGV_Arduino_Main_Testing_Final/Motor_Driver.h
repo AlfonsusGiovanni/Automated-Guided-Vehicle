@@ -41,7 +41,7 @@ class Motor_Driver{
     void motor_Stop(void);
 
     void set_Dir(motor_dir input_dir);
-    void set_Speed(uint8_t input_speed);
+    void set_Speed(int input_speed);
 };
 
 #endif
