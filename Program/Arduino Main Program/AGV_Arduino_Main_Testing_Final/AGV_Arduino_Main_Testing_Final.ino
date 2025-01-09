@@ -866,9 +866,13 @@ void loop(){
 
         case PAUSE:
         Receive_Serial(&parameter);
-        if(running){
-          Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
-        }
+        Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
+
+        if(with_carrier) PinHook_Handler(UP);
+        else PinHook_Handler(DOWN);
+
+        decrease_speedL = 0;
+        decrease_speedR = 0;
         break;
       }
     }
@@ -891,7 +895,7 @@ void Read_Sens(Sens_sel_t sensor_sel){
   }
   prev_sel_sens = sensor_sel;
 
-  if(turning_decision == NONE_TURN){
+  if(turning_decision == NONE_TURN || turning_decision == TURN_STOP){
     sens_data == 0b0000000000000000;
     for(int i=0; i<SENS_NUM; i++){
       sens_value = !digitalRead(sens_pin[i]);
@@ -1117,8 +1121,7 @@ float Check_Battery_Cappacity(void){
 // LF Motor Handler Function
 void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake, uint8_t speed){
   uint8_t 
-  left_tolerance = 0,
-  right_tolerance = 0;
+  mean_speed_now;
 
   balance_speedL = parameter.Left_Speed;
   balance_speedR = parameter.Right_Speed;
@@ -1446,8 +1449,10 @@ void Motor_Handler(uint8_t mode, uint8_t direction, uint8_t accel, uint8_t brake
       break;
 
       case REGENERATIVE_BRAKE:
+      mean_speed_now = (L_speed + R_speed) / 2;
+      
       if(running){
-        for(int i=speed; i>= 0; i-=brake_val){
+        for(int i=mean_speed_now; i>= 0; i-=brake_val){
           if(mode == LF_MODE){
             L_Motor1.set_Speed(i);
             R_Motor1.set_Speed(i);
@@ -1549,32 +1554,22 @@ void Destination_Handler(void){
       parameter.CurrentPos_Value = parameter.Tag_value;
       
       if(!with_carrier){
-        Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
-        lf_pid_val = 0;
+        Serial.print(L_speed);
+        Serial.print("\t");
+        Serial.println(R_speed);
 
-        while(1){
-          if(Station_Handler(0) == true){
-            Motor_Handler(parameter.Running_Mode, BRAKE, NORMAL_ACCEL, NORMAL_BRAKE, 20);
-            delay(1000);
-            PinHook_Handler(UP);
-            with_carrier = true;
-            break;
-          }
-          else{
-            Motor_Handler(parameter.Running_Mode, parameter.Running_Dir, NORMAL_ACCEL, NORMAL_BRAKE, 20);
-          }
+        if(Station_Handler(0) == true){
+          with_carrier = true;
+          turning_decision = NONE_TURN;
+          parameter.Running_State = PAUSE;
         }
       }
 
       else{
-        delay(1000);
-        Motor_Handler(parameter.Running_Mode, parameter.Running_Dir, NORMAL_ACCEL, REGENERATIVE_BRAKE, parameter.Base_Speed);
-        delay(1000);
-        PinHook_Handler(DOWN);
+        delay(2000); 
+        turning_decision = NONE_TURN;
+        parameter.Running_State = PAUSE;
       }
-      
-      turning_decision = NONE_TURN;
-      parameter.Running_State = PAUSE;
     }
 
     else if(parameter.Tag_sign == STATION_SIGN){
@@ -1773,7 +1768,11 @@ void Cross_Check(NFC_Select_t select){
 
 // Carrier Station Check Function
 void CarrierStation_Check(NFC_Select_t select){
-  
+  if(parameter.Tag_sign != CARRIER_SIGN && NFC_F.tagType == CARRIER_SIGN){
+    digitalWrite(PILOTLAMP_PIN, HIGH);
+    decrease_speedR = 40;
+    decrease_speedL = 40;
+  }
 }
 
 // PATH PLANNING FUNCTION
@@ -1823,7 +1822,13 @@ void Nodes_Check(NFC_Select_t select){
         if(path_step[i] == 'f') turning_decision = STRAIGHT;
         else if(path_step[i] == 'r') turning_decision = TURN_RIGHT;
         else if(path_step[i] == 'l') turning_decision = TURN_LEFT;
-        else if(path_step[i] == 's') turning_decision = TURN_STOP;
+        
+        if(NFC_F.tagType != CARRIER_SIGN && path_step[i] == 's') turning_decision = TURN_STOP;
+        else if(NFC_F.tagType == CARRIER_SIGN && path_step[i] == 's'){
+          decrease_speedL = 60;
+          decrease_speedR = 60;
+          turning_decision = TURN_STOP;
+        }
       }
     }
   }
