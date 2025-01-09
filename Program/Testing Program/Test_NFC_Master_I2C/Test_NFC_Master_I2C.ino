@@ -197,7 +197,7 @@ void loop() {
     nfc.SAMConfig();
     digitalWrite(VIR_VCC1, HIGH);
     digitalWrite(VIR_VCC2, LOW);
-    if(NFC_writeTag(&NFC_Tag, TURN_SIGN, 40, 3, 0, 0) == SUCCESS){
+    if(NFC_writeTag(&NFC_Tag, STATION_SIGN, 0, 0, 2, 4) == SUCCESS){
       Serial.println("Write Success...");
       delay(2000);
       break;

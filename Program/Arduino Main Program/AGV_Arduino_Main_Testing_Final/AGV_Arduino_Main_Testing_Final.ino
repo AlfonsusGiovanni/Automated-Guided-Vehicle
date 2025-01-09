@@ -158,11 +158,7 @@ R_speed;
 
 int
 total_weight,
-sens_count,
-HEAD_XP = 1,
-HEAD_XN = -1,
-HEAD_YP = 2,
-HEAD_YN = -2;
+sens_count;
 
 const float
 VCC = 5.00,
@@ -221,6 +217,7 @@ front_state = false,
 rear_state = false,
 with_carrier = false,
 path_planned = false,
+head_checked = false,
 head_aligned = false,
 end_pos = false,
 independent_inputspeed = false;
@@ -311,6 +308,13 @@ typedef enum{
 }Sens_sel_t;
 
 typedef enum{
+  HEAD_XP = 1,
+  HEAD_XN,
+  HEAD_YP,
+  HEAD_YN,
+}Head_dir_t;
+
+typedef enum{
   DOWN = 0x01,
   UP,
 }Hook_dir_t;
@@ -368,7 +372,6 @@ bool Station_Handler(uint8_t mode);
 void NFC_Handler(NFC_Select_t select);
 void Turn_Check(NFC_Select_t select);
 void Cross_Check(NFC_Select_t select);
-void CarrierStation_Check(NFC_Select_t select);
 void Nodes_check(NFC_Select_t select);
 void Run_Path_Planning(void);
 
@@ -385,6 +388,8 @@ void Insert_OpenSet(Point p, int f);
 bool Run_AStar(Point start, Point goal);
 void Reconstruct_Path(Point start, Point goal, char displayGrid[gridWidth][gridHeight]);
 void Reconstruct_PathDir(void);
+
+Head_dir_t Head_Dir_Check(void);
 
 void Change_Heading(double start_heading, double end_heading, double tollerance);
 void GoTo(double start_position, double end_position, double tollerance);
@@ -802,15 +807,14 @@ void loop(){
 
           else if(btn_pressed){
             parameter.Running_State = START;
-            parameter.Running_Dir = FORWARD;
+            parameter.Running_Dir = BACKWARD;
             parameter.Base_Speed = 80;
 
-            parameter.Start_coordinateX = 0;
+            parameter.Start_coordinateX = 4;
             parameter.Start_coordinateY = 7;
-            parameter.Goal_coordinateX = 4;
-            parameter.Goal_coordinateY = 7;
+            parameter.Goal_coordinateX = 2;
+            parameter.Goal_coordinateY = 4;
 
-            head_dir = HEAD_XP;
             Destination_Handler();
             
             digitalWrite(PILOTLAMP_PIN, LOW);
@@ -919,7 +923,7 @@ void Read_Sens(Sens_sel_t sensor_sel){
 
   else if(turning_decision == TURN_LEFT){
     sens_data == 0b0000000000000000;
-    for(int i=10; i<SENS_NUM; i++){
+    for(int i=8; i<SENS_NUM; i++){
       sens_value = !digitalRead(sens_pin[i]);
       bitWrite(sens_data, i, sens_value);
 
@@ -930,7 +934,7 @@ void Read_Sens(Sens_sel_t sensor_sel){
 
   else if(turning_decision == TURN_RIGHT){
     sens_data == 0b0000000000000000;
-    for(int i=0; i<6; i++){
+    for(int i=0; i<8; i++){
       sens_value = !digitalRead(sens_pin[i]);
       bitWrite(sens_data, i, sens_value);
 
@@ -1508,7 +1512,7 @@ void Run_AGV(uint8_t agv_mode){
           prev_tickC = millis();
         }
       }
-      Motor_Handler(parameter.Running_Mode, parameter.Running_Dir, parameter.Running_Accel, parameter.Running_Brake, parameter.Base_Speed);
+      // Motor_Handler(parameter.Running_Mode, parameter.Running_Dir, parameter.Running_Accel, parameter.Running_Brake, parameter.Base_Speed);
       Line_Check(1);
     }
 
@@ -1537,6 +1541,7 @@ void Destination_Handler(void){
   }
 
   while(path_planned == false){
+    head_checked = false;
     Run_Path_Planning();
   }
 
@@ -1721,26 +1726,20 @@ void Turn_Check(NFC_Select_t select){
 // Crossection Check Function
 void Cross_Check(NFC_Select_t select){
   if(select == FRONT_NFC){
-    // DETEKSI AWAL BELOKAN
+    // DETEKSI AWAL SIMPANGAN
     if(parameter.Tag_sign != CROSSECTION_SIGN && NFC_F.tagType == CROSSECTION_SIGN){  
-      if(turning_decision == TURN_LEFT){
-        decrease_speedL = 30;
-        decrease_speedR = 10;
+      if(turning_decision == TURN_LEFT || TURN_RIGHT){
+        decrease_speedL = NFC_F.tagTypeValue;
+        decrease_speedR = NFC_F.tagTypeValue;
         adaptive_timer = 1000;
       }
-      
-      else if(turning_decision == TURN_RIGHT){
-        decrease_speedL = 10;
-        decrease_speedR = 30;
-        adaptive_timer = 1000;
-      }
-
+    
       else if(turning_decision == STRAIGHT){
-        digitalWrite(PILOTLAMP_PIN, HIGH);
         decrease_speedR = 30;
         decrease_speedL = 30;
         adaptive_timer = 0;
       }
+      digitalWrite(PILOTLAMP_PIN, HIGH);
       prev_tickF = millis();
     }
     
@@ -1764,14 +1763,44 @@ void Cross_Check(NFC_Select_t select){
       prev_tickF = 0;
     }
   }
-}
 
-// Carrier Station Check Function
-void CarrierStation_Check(NFC_Select_t select){
-  if(parameter.Tag_sign != CARRIER_SIGN && NFC_F.tagType == CARRIER_SIGN){
-    digitalWrite(PILOTLAMP_PIN, HIGH);
-    decrease_speedR = 40;
-    decrease_speedL = 40;
+  else if(select == REAR_NFC){
+    // DETEKSI AWAL SIMPANGAN
+    if(parameter.Tag_sign != CROSSECTION_SIGN && NFC_R.tagType == CROSSECTION_SIGN){  
+      if(turning_decision == TURN_LEFT || TURN_RIGHT){
+        decrease_speedL = NFC_F.tagTypeValue;
+        decrease_speedR = NFC_F.tagTypeValue;
+        adaptive_timer = 1000;
+      }
+
+      else if(turning_decision == STRAIGHT){
+        decrease_speedR = 30;
+        decrease_speedL = 30;
+        adaptive_timer = 0;
+      }
+      digitalWrite(PILOTLAMP_PIN, HIGH);
+      prev_tickF = millis();
+    }
+    
+    // DETEKSI AKHIR SIMPANGAN
+    else if(prev_tickF != 0 && millis() - prev_tickF >= 2000 && millis() - prev_tickF < 6000 - adaptive_timer && NFC_R.tagType == CROSSECTION_SIGN){
+      digitalWrite(PILOTLAMP_PIN, LOW);
+      parameter.Tag_sign = NONE_SIGN;
+      turning_decision = NONE_TURN;
+      decrease_speedL = 0;
+      decrease_speedR = 0;
+      prev_tickF = 0;
+    }
+
+    // RESET JIKA AKHIR SIMPANGAN TIDAK TERDETEKSI
+    else if(prev_tickF != 0 && millis() - prev_tickF >= 6000 - adaptive_timer && NFC_R.tagType != CROSSECTION_SIGN){
+      digitalWrite(PILOTLAMP_PIN, LOW);
+      parameter.Tag_sign = NONE_SIGN;
+      turning_decision = NONE_TURN;
+      decrease_speedL = 0;
+      decrease_speedR = 0;
+      prev_tickF = 0;
+    }
   }
 }
 
@@ -1806,14 +1835,6 @@ void Run_Path_Planning(void){
 
 // NODES CHECK FUNCTION
 void Nodes_Check(NFC_Select_t select){
-  // Serial.print("Tag pos X: ");
-  // Serial.print(NFC_F.tagPosX);
-  // Serial.print("\t");
-  // Serial.print("Tag pos Y: ");
-  // Serial.print(NFC_F.tagPosY);
-  // Serial.print("\t");
-  // Serial.println(turning_decision);
-
   if(select == FRONT_NFC){
     for(int i=0; i<=stack_size; i++){
       if(NFC_F.tagPosX == invert_traceBack[i].x && NFC_F.tagPosY == invert_traceBack[i].y && nodes_checked[i].x != invert_traceBack[i].x && nodes_checked[i].y != invert_traceBack[i].y){
@@ -1834,22 +1855,40 @@ void Nodes_Check(NFC_Select_t select){
   }
 
   else if(select == REAR_NFC){
-    for(int i=0; i<stack_size; i++){
+    for(int i=0; i<=stack_size; i++){
       if(NFC_R.tagPosX == invert_traceBack[i].x && NFC_R.tagPosY == invert_traceBack[i].y && nodes_checked[i].x != invert_traceBack[i].x && nodes_checked[i].y != invert_traceBack[i].y){
         nodes_checked[i] = invert_traceBack[i];
 
         if(path_step[i] == 'f') turning_decision = STRAIGHT;
         else if(path_step[i] == 'r') turning_decision = TURN_RIGHT;
         else if(path_step[i] == 'l') turning_decision = TURN_LEFT;
-        else if(path_step[i] == 's') turning_decision = TURN_STOP;
+        
+        if(NFC_R.tagType != CARRIER_SIGN && path_step[i] == 's') turning_decision = TURN_STOP;
+        else if(NFC_R.tagType == CARRIER_SIGN && path_step[i] == 's'){
+          decrease_speedL = 60;
+          decrease_speedR = 60;
+          turning_decision = TURN_STOP;
+        }
       }
     }
   }
 
+  // Serial.print("Tag pos X: ");
+  // Serial.print(NFC_R.tagPosX);
+  // Serial.print("\t");
+  // Serial.print("Tag pos Y: ");
+  // Serial.print(NFC_R.tagPosY);
+  // Serial.print("\t");
+  // Serial.print("Step: ");
+  // Serial.print(path_step[5]);
+  // Serial.print("\t");
+  // Serial.print("Turning Decision: ");
+  // Serial.println(turning_decision);
+
   Destination_Handler();
 }
 
-// NFC Handler Function
+// NFC HANDLER FUNCTION
 void NFC_Handler(NFC_Select_t select){
   if(select == FRONT_NFC){
     digitalWrite(VIR_VCC1, HIGH);
@@ -1894,7 +1933,7 @@ void NFC_Handler(NFC_Select_t select){
   }
 }
 
-// NFC Read Data Function
+// NFC READ DATA FUNCTION
 NFC_Status_t NFC_readData(Tag_Data_t *nfc_data){
   uint8_t
   get_uid[7],
@@ -1928,7 +1967,7 @@ NFC_Status_t NFC_readData(Tag_Data_t *nfc_data){
   else return UID_READ_ERROR;
 }
 
-// NFC Tag Read Function
+// NFC READ TAG FUNCTION
 NFC_Status_t NFC_readTag(Tag_Data_t *nfc_data){
   for(int i=0; i<sizeof(nfc_data->stored_data); i++){
     nfc_data->stored_data[i] = 0x00;
@@ -1974,12 +2013,12 @@ Point Return_OpenSet(void){
   return p;
 }
 
-// Calculate Calc_Heuristic Value Function
+// HEURISTIC CALCULATION FUNCTION
 int Calc_Heuristic(Point a, Point b){
   return abs(a.x - b.x) + abs(a.y - b.y);
 }
 
-// New Cell Point Insert Function
+// CHECKED CELL  POINT FUNCTION
 void Insert_OpenSet(Point p, int f){
 int i = openSetSize - 1;
   while (i >= 0 && openSetF[i] > f) {
@@ -1992,7 +2031,7 @@ int i = openSetSize - 1;
   openSetSize++;
 }
  
-// A-Star Algorithm Function
+// A-STAR ALGORITHM FUNCTION
 bool Run_AStar(Point start, Point goal){
   int gScore[gridWidth][gridHeight];
   for (int i = 0; i < gridWidth; i++){
@@ -2062,17 +2101,17 @@ void Reconstruct_Path(Point start, Point goal){
 void Reconstruct_PathDir(void){
   Point prev[stack_size];
 
+  head_dir = Head_Dir_Check();
+
   for(int i=0; i<stack_size; i++){
     if(head_dir == HEAD_YN){
       if(invert_traceBack[i+1].y - invert_traceBack[i].y == 1) path_step[i] = 'f';
       else if(invert_traceBack[i+1].x - invert_traceBack[i].x == 1){
-        if(parameter.Running_Dir == FORWARD) path_step[i] = 'l';
-        else if(parameter.Running_Dir == BACKWARD) path_step[i] = 'r';
+        path_step[i] = 'l';
         head_dir = HEAD_XP;
       }
       else if(invert_traceBack[i+1].x - invert_traceBack[i].x == -1){
-        if(parameter.Running_Dir == FORWARD) path_step[i] = 'r';
-        else if(parameter.Running_Dir == BACKWARD) path_step[i] = 'l';
+        path_step[i] = 'r';
         head_dir = HEAD_XN;
       }
     }
@@ -2080,13 +2119,11 @@ void Reconstruct_PathDir(void){
     else if(head_dir == HEAD_YP){
       if(invert_traceBack[i+1].y - invert_traceBack[i].y == -1) path_step[i] = 'f';
       else if(invert_traceBack[i+1].x - invert_traceBack[i].x == -1){
-        if(parameter.Running_Dir == FORWARD) path_step[i] = 'l';
-        else if(parameter.Running_Dir == BACKWARD) path_step[i] = 'r';
+        path_step[i] = 'l';
         head_dir = HEAD_XN;
       }
       else if(invert_traceBack[i+1].x - invert_traceBack[i].x == 1){
-        if(parameter.Running_Dir == FORWARD) path_step[i] = 'r';
-        else if(parameter.Running_Dir == BACKWARD) path_step[i] = 'l';
+        path_step[i] = 'r';
         head_dir = HEAD_XP;
       }
     }
@@ -2094,13 +2131,11 @@ void Reconstruct_PathDir(void){
     else if(head_dir == HEAD_XN){
       if(invert_traceBack[i+1].x - invert_traceBack[i].x == -1) path_step[i] = 'f';
       else if(invert_traceBack[i+1].y - invert_traceBack[i].y == -1){
-        if(parameter.Running_Dir == FORWARD) path_step[i] = 'r';
-        else if(parameter.Running_Dir == BACKWARD) path_step[i] = 'l';
+        path_step[i] = 'r';
         head_dir = HEAD_YP;
       }
       else if(invert_traceBack[i+1].y - invert_traceBack[i].y == 1){
-        if(parameter.Running_Dir == FORWARD) path_step[i] = 'l';
-        else if(parameter.Running_Dir == BACKWARD) path_step[i] = 'r';
+        path_step[i] = 'l';
         head_dir = HEAD_YN;
       }
     }
@@ -2108,18 +2143,28 @@ void Reconstruct_PathDir(void){
     else if(head_dir == HEAD_XP){
       if(invert_traceBack[i+1].x - invert_traceBack[i].x == 1) path_step[i] = 'f';
       else if(invert_traceBack[i+1].y - invert_traceBack[i].y == 1){
-        if(parameter.Running_Dir == FORWARD) path_step[i] = 'r';
-        else if(parameter.Running_Dir == BACKWARD) path_step[i] = 'l';
+        path_step[i] = 'r';
         head_dir = HEAD_YN;
       }
       else if(invert_traceBack[i+1].y - invert_traceBack[i].y == -1){
-        if(parameter.Running_Dir == FORWARD) path_step[i] = 'l';
-        else if(parameter.Running_Dir == BACKWARD) path_step[i] = 'r';
+        path_step[i] = 'l';
         head_dir = HEAD_YP;
       }
     }
   }
   path_step[stack_size] = 's';
+}
+
+// HEAD DIRECTION CHECK FUNCTION
+Head_dir_t Head_Dir_Check(void){
+  if(!head_checked){
+    if(invert_traceBack[1].y - invert_traceBack[0].y == 1) return HEAD_YP;
+    else if(invert_traceBack[1].y - invert_traceBack[0].y == -1) return HEAD_YN;
+    else if(invert_traceBack[1].x - invert_traceBack[0].x == 1) return HEAD_XP;
+    else if(invert_traceBack[1].x - invert_traceBack[0].x == -1) return HEAD_XN;
+
+    head_checked = true;
+  }
 }
 
 // CHANGE HEADING POSITION
